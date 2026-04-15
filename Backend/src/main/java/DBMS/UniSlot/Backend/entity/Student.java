@@ -98,6 +98,10 @@ public class Student extends BaseEntity {
     @JoinColumn(name = "section_id")
     private DegreeYearSection section;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "degree_id", nullable = false)
+    private Degree degree;
+
     /** All lecture slot selections made by this student. */
     @OneToMany(mappedBy = "student",
             cascade = CascadeType.ALL,
