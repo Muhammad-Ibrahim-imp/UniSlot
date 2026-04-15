@@ -1,4 +1,10 @@
 package DBMS.UniSlot.Backend.enums;
 
-public class PaymentStatus {
+/**
+ * Status of an individual payment transaction.
+ */
+public enum PaymentStatus {
+    SUCCESS,
+    FAILED,
+    PENDING
 }
