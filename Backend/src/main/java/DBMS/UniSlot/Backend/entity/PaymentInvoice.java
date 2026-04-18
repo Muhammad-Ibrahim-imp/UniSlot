@@ -1,6 +1,6 @@
 package DBMS.UniSlot.Backend.entity;
 
-import com.university.slotselector.enums.InvoiceStatus;
+import DBMS.UniSlot.Backend.enums.InvoiceStatus;
 import jakarta.persistence.*;
 import lombok.*;
 

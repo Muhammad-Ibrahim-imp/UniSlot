@@ -64,6 +64,18 @@ public class Course extends BaseEntity {
     // ── Relationships ─────────────────────────────────────────
 
     /**
+     * All semester-based degree mappings for this course (DegreeCourseMapping).
+     * Used by admin to assign the course to a degree at a specific semester number.
+     * E.g., PHY101 → BSCS at semester 4, PHY101 → BSSE at semester 2.
+     */
+    @OneToMany(mappedBy = "course",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<DegreeCourseMapping> degreeMappings = new ArrayList<>();
+
+    /**
      * All degree-year mappings where this course appears.
      * A course can appear in multiple year groups across degrees.
      */

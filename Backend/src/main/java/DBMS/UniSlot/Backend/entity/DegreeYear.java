@@ -89,14 +89,6 @@ public class DegreeYear extends BaseEntity {
     private List<DegreeYearCourse> yearCourses = new ArrayList<>();
 
     /**
-     * Lecture slots offered for this year group.
-     */
-    @OneToMany(mappedBy = "degreeYear",
-            fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<LectureSlot> lectureSlots = new ArrayList<>();
-
-    /**
      * Slot selection windows for this year group.
      */
     @OneToMany(mappedBy = "degreeYear",

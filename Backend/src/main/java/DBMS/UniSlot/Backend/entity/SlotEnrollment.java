@@ -49,7 +49,7 @@ public class SlotEnrollment extends BaseEntity {
      * The specific lecture slot the student chose.
      * (This is ONE of potentially many day-entries for a weekly slot.)
      */
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "lecture_slot_id", nullable = false)
     private LectureSlot lectureSlot;
 

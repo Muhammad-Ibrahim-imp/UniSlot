@@ -83,24 +83,27 @@ public class Student extends BaseEntity {
     /** The degree program (e.g., BSCS). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "degree_program_id", nullable = false)
-    private Degree degreeProgram;
+    private Degree degree;
+
+    /**
+     * Current semester of the student (1-12).
+     * Used to determine which courses are available for selection.
+     */
+    @Column(name = "current_semester", nullable = false)
+    private Integer currentSemester;
 
     /**
      * The specific year group this student currently belongs to
      * (e.g., "BSCS Year 2"). Determines visible courses and slots.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "degree_year_id", nullable = false)
+    @JoinColumn(name = "degree_year_id", nullable = true)
     private DegreeYear degreeYear;
 
     /** The class section (A, B, C) within the year group. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "section_id")
+    @JoinColumn(name = "section_id", nullable = true)
     private DegreeYearSection section;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "degree_id", nullable = false)
-    private Degree degree;
 
     /** All lecture slot selections made by this student. */
     @OneToMany(mappedBy = "student",

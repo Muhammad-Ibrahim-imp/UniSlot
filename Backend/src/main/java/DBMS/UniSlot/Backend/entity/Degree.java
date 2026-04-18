@@ -60,6 +60,18 @@ public class Degree extends BaseEntity {
     private Department department;
 
     /**
+     * All course-to-semester mappings for this degree (DegreeCourseMapping).
+     * E.g., "Physics (PHY101) is offered to BSCS in semester 4".
+     * This is the join table entity between Degree and Course with semester number.
+     */
+    @OneToMany(mappedBy = "degree",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<DegreeCourseMapping> courseMappings = new ArrayList<>();
+
+    /**
      * All course-to-semester mappings for this degree.
      * E.g., "Physics is offered to BSCS in semester 4".
      * This is the join table entity between Degree and Course.
