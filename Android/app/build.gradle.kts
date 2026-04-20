@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace   = "com.university.slotselector"
+    namespace   = "oop.project.unislotandroid"
     compileSdk  = 35
 
 
