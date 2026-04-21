@@ -15,15 +15,34 @@ private val OnBackground = Color(0xFF111827)
 private val OnSurface   = Color(0xFF111827)
 
 private val AppColorScheme = lightColorScheme(
-    primary          = Primary,
-    onPrimary        = OnPrimary,
-    secondary        = Secondary,
-    background       = Background,
-    surface          = Surface,
-    error            = Error,
-    onBackground     = OnBackground,
-    onSurface        = OnSurface,
-    surfaceVariant   = Color(0xFFE5E7EB),
+// Main brand color of the app (used for buttons, app bar, highlights)
+    primary = Primary,
+
+// Text/icons that appear ON top of primary color
+    onPrimary = OnPrimary,
+
+// Secondary accent color (used for less prominent UI elements)
+    secondary = Secondary,
+
+// App background color (overall screen background)
+    background = Background,
+
+// Surface color (cards, sheets, dialogs background)
+    surface = Surface,
+
+// Error color (used for errors, warnings, destructive actions)
+    error = Error,
+
+// Text/icons that appear on top of background color
+    onBackground = OnBackground,
+
+// Text/icons that appear on top of surface color
+    onSurface = OnSurface,
+
+// Slightly different surface shade (used for sections, cards variation)
+    surfaceVariant = Color(0xFFE5E7EB),
+
+// Text/icons on top of surfaceVariant (muted text)
     onSurfaceVariant = Color(0xFF6B7280),
 )
 

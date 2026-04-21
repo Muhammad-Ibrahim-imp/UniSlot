@@ -133,7 +133,8 @@ object RetrofitClient {
         chain.proceed(request) //It means:  “Send this HTTP request forward to the next step (network/server) and continue the request chain.”
     }
 
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
+    private val loggingInterceptor = HttpLoggingInterceptor().apply {//apply is a scope function used primarily for object configuration.
+        // It allows you to access an object's members directly within a code block and always returns the object itself.
         level = HttpLoggingInterceptor.Level.BODY
     }   //It is a built-in OkHttp tool that:Logs HTTP requests and responses for debugging.
     //So it shows things like:
