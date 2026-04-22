@@ -54,7 +54,6 @@ fun StudentDashboardScreen(vm: MainViewModel, onNavigate: (String) -> Unit) {
         // item { ... } is used to add a single static element inside the LazyColumn.
         // It is typically used for headers, footers, or standalone components
         // that are not part of a repeating list.
-        //It takes your list and loops over it, creating UI for each element.
         item {
             Text("Welcome, ${p.name.split(" ").first()} 👋",
                 fontWeight = FontWeight.Bold, fontSize = 20.sp)
