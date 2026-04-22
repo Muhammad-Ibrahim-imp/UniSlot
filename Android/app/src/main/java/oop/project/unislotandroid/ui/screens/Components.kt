@@ -6,3 +6,7 @@ import androidx.compose.runtime.Composable
 fun AppTopBar(title: String, content: @Composable () -> Unit) {
     TODO("Not yet implemented")
 }
+@Composable
+fun ErrorBanner(x0: String) {
+    TODO("Not yet implemented")
+}
