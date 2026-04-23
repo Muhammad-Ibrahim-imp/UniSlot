@@ -164,8 +164,67 @@ private fun DepartmentDialog(
 // ADMIN COURSES
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun AdminCoursesScreen(x0: MainViewModel) {
-    TODO("Not yet implemented")
+fun AdminCoursesScreen(vm: MainViewModel) {
+    val state by vm.courses.collectAsState()
+    LaunchedEffect(Unit) { vm.loadCourses() }
+
+    var showDialog  by remember { mutableStateOf(false) }
+    var feedbackMsg by remember { mutableStateOf("") }
+    var isError     by remember { mutableStateOf(false) }
+
+    Column(Modifier.fillMaxSize()) {
+        if (feedbackMsg.isNotBlank()) {
+            if (isError) ErrorBanner(feedbackMsg) else SuccessBanner(feedbackMsg)
+        }
+        when (state) {
+            is UiState.Loading -> LoadingScreen()
+            is UiState.Success -> {
+                val items = (state as UiState.Success).data//Means:“I am sure the state is Success, so give me the list of professors inside it.”
+                //Cast state to Success and extract its data list.
+                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("${items.size} Course(s)", fontWeight = FontWeight.SemiBold)
+                            FloatingActionButton(onClick = { showDialog = true },
+                                modifier = Modifier.size(40.dp), containerColor = MaterialTheme.colorScheme.primary) {
+                                Icon(Icons.Default.Add, null, tint = Color.White)
+                            }
+                        }
+                    }
+                    items(items) { course ->
+                        Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(course.name, fontWeight = FontWeight.Medium)
+                                    Text("${course.courseCode} · ${course.creditHours} credits · ${course.availableSlotGroups} slot groups",
+                                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (!course.description.isNullOrBlank()) {
+                                        Text(course.description.take(80), fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    if (showDialog) {
+        oop.project.unislotandroid.ui.screens.CourseDialog(
+            onDismiss = { showDialog = false },
+            onSave = { name, code, credits, desc ->
+                vm.createCourse(name, code, credits, desc) { ok, msg ->
+                    isError = !ok; feedbackMsg = msg
+                }
+                showDialog = false
+            }
+        )
+    }
 }
 
 @Composable
