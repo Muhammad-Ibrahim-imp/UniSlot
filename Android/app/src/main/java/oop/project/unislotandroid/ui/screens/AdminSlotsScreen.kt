@@ -1,6 +1,7 @@
 package oop.project.unislotandroid.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +23,7 @@ import oop.project.unislotandroid.ui.theme.GreenBadge
 import oop.project.unislotandroid.ui.theme.RedBadge
 import oop.project.unislotandroid.viewmodel.MainViewModel
 import oop.project.unislotandroid.viewmodel.UiState
+import kotlin.code
 
 private val ALL_DAYS = listOf("MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY")
 private val DAY_SHORT = mapOf(
@@ -482,6 +484,189 @@ private fun ScheduleEntryCard(
 // ADMIN STUDENTS
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun AdminStudentsScreen(x0: MainViewModel) {
-    TODO("Not yet implemented")
+fun AdminStudentsScreen(vm: MainViewModel) {
+    val state by vm.students.collectAsState()
+    val depts by vm.departments.collectAsState()
+    LaunchedEffect(Unit) { vm.loadStudents(); vm.loadDepartments() }
+
+    var showDialog  by remember { mutableStateOf(false) }
+    var feedbackMsg by remember { mutableStateOf("") }
+    var isError     by remember { mutableStateOf(false) }
+    var search      by remember { mutableStateOf("") }
+    var feeFilter   by remember { mutableStateOf("") }
+
+    Column(Modifier.fillMaxSize()) {
+        if (feedbackMsg.isNotBlank()) {
+            if (isError) ErrorBanner(feedbackMsg) else SuccessBanner(feedbackMsg)
+        }
+        when (state) {
+            is UiState.Loading -> LoadingScreen()
+            is UiState.Success -> {
+                val allItems = (state as UiState.Success).data
+                val filtered = allItems.filter { s ->
+                    (search.isBlank() || s.name.contains(search, true) || s.rollNumber.contains(search, true)) &&
+                            (feeFilter.isBlank() || s.feeStatus == feeFilter/*didnt get it*/)
+                }
+                val paid = allItems.count { it.feeStatus == "PAID" }
+
+                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatCard("Total", "${allItems.size}", modifier = Modifier.weight(1f))
+                            StatCard("Paid", "$paid", color = GreenBadge, modifier = Modifier.weight(1f))
+                            StatCard("Unpaid", "${allItems.size - paid}", color = RedBadge, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text("${filtered.size} Student(s)", fontWeight = FontWeight.SemiBold)
+                                FloatingActionButton(onClick = { showDialog = true },
+                                    modifier = Modifier.size(40.dp), containerColor = MaterialTheme.colorScheme.primary) {
+                                    Icon(Icons.Default.Add, null, tint = Color.White)
+                                }
+                            }
+                            OutlinedTextField(value = search, onValueChange = { search = it },
+                                placeholder = { Text("Search name or roll no…") }, singleLine = true,
+                                modifier = Modifier.fillMaxWidth())
+                            // Row that displays filter options as selectable chips (All, Paid, Unpaid)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                                // Create a list of pairs: (actual value, display label)
+                                listOf("" to "All", "PAID" to "Paid", "UNPAID" to "Unpaid").forEach { (v, l) ->
+
+                                    FilterChip(
+                                        selected = feeFilter == v, // highlights chip if it matches current filter
+
+                                        // When user clicks a chip, update feeFilter with its value
+                                        // "" → show all
+                                        // "PAID" → show only paid students
+                                        // "UNPAID" → show only unpaid students
+                                        onClick = { feeFilter = v },
+
+                                        // Text shown on the chip (user-friendly label)
+                                        label = { Text(l) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    items(filtered) { student ->
+                        Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
+                            Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(student.name, fontWeight = FontWeight.Medium)
+                                    Text("${student.rollNumber} · ${student.degreeCode ?: "?"} · Sem ${student.currentSemester}",
+                                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${student.slotsSelected} slot(s) enrolled · ${student.departmentCode ?: ""}",
+                                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    StatusBadge(student.feeStatus, student.feeStatus)
+                                    TextButton(onClick = {
+                                        val ns = if (student.feeStatus == "PAID") "UNPAID" else "PAID"
+                                        vm.updateFeeStatus(student.id, ns) { ok, msg -> isError = !ok; feedbackMsg = msg }
+                                    }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+                                        Text(if (student.feeStatus == "PAID") "Mark Unpaid" else "✓ Mark Paid",
+                                            fontSize = 11.sp, color = if (student.feeStatus == "PAID") RedBadge else GreenBadge)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    if (showDialog) {
+        val deptList = (depts as? UiState.Success)?.data ?: emptyList()
+        com.university.slotselector.ui.screens.StudentDialog(
+            departments = deptList, onDismiss = { showDialog = false },
+            onLoadDegrees = { vm.loadDegrees(it) },
+            degreesFlow = vm.degrees,
+            onSave = { req ->
+                vm.createStudent(req) { ok, msg ->
+                    isError = !ok; feedbackMsg = msg
+                }; showDialog = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StudentDialog(
+    departments: List<DepartmentResponse>,
+    onDismiss: () -> Unit,
+    onLoadDegrees: (Long) -> Unit,
+    degreesFlow: kotlinx.coroutines.flow.StateFlow<List<DegreeResponse>>,
+    onSave: (CreateStudentRequest) -> Unit
+) {
+    val degrees by degreesFlow.collectAsState()
+    var name    by remember { mutableStateOf("") }
+    var roll    by remember { mutableStateOf("") }
+    var email   by remember { mutableStateOf("") }
+    var selDept by remember { mutableStateOf<DepartmentResponse?>(null) }
+    var selDeg  by remember { mutableStateOf<DegreeResponse?>(null) }
+    var dExp    by remember { mutableStateOf(false) }
+    var degExp  by remember { mutableStateOf(false) }
+    var semExp  by remember { mutableStateOf(false) }
+    var semester by remember { mutableStateOf(1) }
+    val maxSem = (selDeg?.durationYears ?: 4) * 2
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Column { Text("Register Student"); Text("Default password = roll number", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+        text = {
+            // Enables vertical scrolling for the composable when content exceeds available height.
+            // rememberScrollState() stores and remembers the scroll position across recompositions.
+            //Modifier.verticalScroll(rememberScrollState()),
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Full Name *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = roll, onValueChange = { roll = it }, label = { Text("Roll Number *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                ExposedDropdownMenuBox(expanded = dExp, onExpandedChange = { dExp = it }) {
+                    OutlinedTextField(value = selDept?.name ?: "Department *", onValueChange = {}, readOnly = true,
+                        label = { Text("Department") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(dExp) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = dExp, onDismissRequest = { dExp = false }) {
+                        departments.forEach { d -> DropdownMenuItem(text = { Text(d.name) },
+                            onClick = { selDept = d; selDeg = null; semester = 1; onLoadDegrees(d.id); dExp = false }) }
+                    }
+                }
+                ExposedDropdownMenuBox(expanded = degExp, onExpandedChange = { degExp = it && selDept != null }) {
+                    OutlinedTextField(value = selDeg?.let { "${it.name} (${it.code})" } ?: "Degree *",
+                        onValueChange = {}, readOnly = true, label = { Text("Degree") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(degExp) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = degExp, onDismissRequest = { degExp = false }) {
+                        degrees.forEach { d -> DropdownMenuItem(text = { Text("${d.name} (${d.code})") },
+                            onClick = { selDeg = d; semester = 1; degExp = false }) }
+                    }
+                }
+                ExposedDropdownMenuBox(expanded = semExp, onExpandedChange = { semExp = it }) {
+                    OutlinedTextField(value = "Semester $semester", onValueChange = {}, readOnly = true,
+                        label = { Text("Current Semester") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(semExp) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth())
+                    // Creates a dropdown list of semesters from 1 to maxSem using a range (1..maxSem)
+                    ExposedDropdownMenu(expanded = semExp, onDismissRequest = { semExp = false }) {
+                        (1..maxSem).forEach { n -> DropdownMenuItem(text = { Text("Semester $n") },
+                            onClick = { semester = n; semExp = false }) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val dept = selDept ?: return@Button; val deg = selDeg ?: return@Button
+                if (name.isBlank() || roll.isBlank() || email.isBlank()) return@Button
+                onSave(CreateStudentRequest(name.trim(), roll.trim(), email.trim(), dept.id, deg.id, semester))
+            }) { Text("Register") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
