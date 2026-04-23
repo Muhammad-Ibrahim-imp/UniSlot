@@ -584,7 +584,7 @@ fun AdminStudentsScreen(vm: MainViewModel) {
 
     if (showDialog) {
         val deptList = (depts as? UiState.Success)?.data ?: emptyList()
-        com.university.slotselector.ui.screens.StudentDialog(
+        oop.project.unislotandroid.ui.screens.StudentDialog(
             departments = deptList, onDismiss = { showDialog = false },
             onLoadDegrees = { vm.loadDegrees(it) },
             degreesFlow = vm.degrees,
