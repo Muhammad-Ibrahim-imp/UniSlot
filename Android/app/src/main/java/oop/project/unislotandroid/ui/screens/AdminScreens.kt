@@ -112,9 +112,90 @@ fun AdminDashboardScreen(vm: MainViewModel) {
 // ADMIN DEPARTMENTS
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun AdminDepartmentsScreen(x0: MainViewModel) {
-    TODO("Not yet implemented")
+fun AdminDepartmentsScreen(vm: MainViewModel) {
+    val state by vm.departments.collectAsState()
+    LaunchedEffect(Unit) { vm.loadDepartments() }
+
+    var showDialog    by remember { mutableStateOf(false) }
+    var editTarget    by remember { mutableStateOf<oop.project.unislotandroid.data.model.DepartmentResponse?>(null) }
+    var feedbackMsg   by remember { mutableStateOf("") }
+    var isError       by remember { mutableStateOf(false) }
+
+    Column(Modifier.fillMaxSize()) {
+        if (feedbackMsg.isNotBlank()) {
+            if (isError) ErrorBanner(feedbackMsg) else SuccessBanner(feedbackMsg)
+        }
+
+        when (state) {
+            is UiState.Loading -> LoadingScreen()
+            is UiState.Error   -> ErrorBanner((state as UiState.Error).message)
+            is UiState.Success -> {
+                val items = (state as UiState.Success).data
+                LazyColumn(
+                    contentPadding     = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("${items.size} Department(s)", fontWeight = FontWeight.SemiBold)
+                            FloatingActionButton(onClick = { editTarget = null; showDialog = true },
+                                modifier = Modifier.size(40.dp), containerColor = MaterialTheme.colorScheme.primary) {
+                                Icon(Icons.Default.Add, null, tint = Color.White)
+                            }
+                        }
+                    }
+                    items(items) { dept ->
+                        Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
+                            Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(dept.name, fontWeight = FontWeight.Medium)
+                                    Text("${dept.code} · ${dept.degreeCount} degrees · ${dept.studentCount} students",
+                                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Row {
+                                    IconButton(onClick = { editTarget = dept; showDialog = true }) {
+                                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = {
+                                        vm.deleteDepartment(dept.id) { ok, msg ->
+                                            isError = !ok; feedbackMsg = msg
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Delete, null, tint = RedBadge)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    if (showDialog) {
+        oop.project.unislotandroid.ui.screens.DepartmentDialog(
+            initial = editTarget,
+            onDismiss = { showDialog = false },
+            onSave = { name, code ->
+                if (editTarget == null) {
+                    vm.createDepartment(name, code) { ok, msg -> isError = !ok; feedbackMsg = msg }
+                } else {
+                    vm.updateDepartment(
+                        editTarget!!.id/*“I am 100% sure this is NOT null, treat it as non-null.”
+                    If editTarget == null → app will crash:NullPointerException*/,
+                        name, code
+                    ) { ok, msg -> isError = !ok; feedbackMsg = msg }
+                }
+                showDialog = false
+            }
+        )
+    }
 }
+
+
 
 @Composable
 private fun DepartmentDialog(
