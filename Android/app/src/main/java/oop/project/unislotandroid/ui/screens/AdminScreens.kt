@@ -3,6 +3,7 @@ package oop.project.unislotandroid.ui.screens
 import androidx.compose.runtime.Composable
 import oop.project.unislotandroid.viewmodel.MainViewModel
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import oop.project.unislotandroid.ui.theme.GreenBadge
 import oop.project.unislotandroid.ui.theme.RedBadge
 import oop.project.unislotandroid.viewmodel.UiState
+import kotlin.compareTo
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN DASHBOARD
@@ -217,8 +219,70 @@ private fun CourseDialog(onDismiss: () -> Unit, onSave: (String, String, Int, St
 // ADMIN PROFESSORS
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun AdminProfessorsScreen(x0: MainViewModel) {
-    TODO("Not yet implemented")
+fun AdminProfessorsScreen(vm: MainViewModel) {
+    val state by vm.professors.collectAsState()
+    val depts by vm.departments.collectAsState()
+    LaunchedEffect(Unit) { vm.loadProfessors(); vm.loadDepartments() }
+
+    var showDialog  by remember { mutableStateOf(false) }
+    var feedbackMsg by remember { mutableStateOf("") }
+    var isError     by remember { mutableStateOf(false) }
+
+    Column(Modifier.fillMaxSize()) {
+        if (feedbackMsg.isNotBlank()) {
+            if (isError) ErrorBanner(feedbackMsg) else SuccessBanner(feedbackMsg)
+        }
+        when (state) {
+            is UiState.Loading -> LoadingScreen()
+            is UiState.Success -> {
+                val items = (state as UiState.Success).data
+                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text("${items.size} Professor(s)", fontWeight = FontWeight.SemiBold)
+                            FloatingActionButton(onClick = { showDialog = true },
+                                modifier = Modifier.size(40.dp), containerColor = MaterialTheme.colorScheme.primary) {
+                                Icon(Icons.Default.Add, null, tint = Color.White)
+                            }
+                        }
+                    }
+                    items(items) { prof ->
+                        Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
+                            Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(prof.name, fontWeight = FontWeight.Medium)
+                                    Text(prof.email, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (prof.departmentName != null)
+                                        Text(prof.departmentName, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                StatusBadge(
+                                    "${String.format("%.0f", prof.fillRatePercent)}%", //Convert a decimal number into a rounded percentage string.
+                                    if (prof.fillRatePercent >= 80) "PAID" else "PARTIAL"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+
+    if (showDialog) {
+        val deptList = (depts as? UiState.Success)?.data ?: emptyList()
+        oop.project.unislotandroid.ui.screens.ProfessorDialog(
+            departments = deptList,
+            onDismiss = { showDialog = false },
+            onSave = { name, email, qual, deptId ->
+                vm.createProfessor(name, email, qual, deptId) { ok, msg ->
+                    isError = !ok; feedbackMsg = msg
+                }
+                showDialog = false
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
