@@ -106,18 +106,196 @@ fun AdminDashboardScreen(vm: MainViewModel) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN DEPARTMENTS
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun AdminProfessorsScreen(x0: MainViewModel) {
+fun AdminDepartmentsScreen(x0: MainViewModel) {
     TODO("Not yet implemented")
 }
 
+@Composable
+private fun DepartmentDialog(
+    initial: oop.project.unislotandroid.data.model.DepartmentResponse?,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit
+) {
+    var name by remember { mutableStateOf(initial?.name ?: "") }
+    var code by remember { mutableStateOf(initial?.code ?: "") }
+
+    //AlertDialog is a prebuilt UI component in Jetpack Compose used to show a popup dialog on top of the screen.
+    // Basic Structure:
+    //AlertDialog(
+    //    onDismissRequest = { }, Called when:User taps outside dialog. Presses back button. Used to close dialog
+    //    title = { }, Displays heading of dialog
+    //    text = { }, Main content area. Can contain: 1) Text 2) Column 3) Input fields (like our form)
+    //    confirmButton = { }, Positive action button Examples: 1)Save 2)OK 3)Delete
+    //    dismissButton = { } Cancel / negative action Examples: 1)Cancel 2)No
+    //)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title  = { Text(if (initial == null) "New Department" else "Edit Department") },
+        text   = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,                    // current state
+                    onValueChange = { name = it },   // updates state
+                    label = { Text("Department Name") }, // UI label
+                    singleLine = true,               // restrict to one line
+                    modifier = Modifier.fillMaxWidth()   // layout width
+                )
+                OutlinedTextField(value = code, onValueChange = { code = it.uppercase() },
+                    label = { Text("Code (e.g. CS)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            Button(onClick = { if (name.isNotBlank() && code.isNotBlank()) onSave(name.trim(), code.trim()) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN COURSES
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun AdminCoursesScreen(x0: MainViewModel) {
     TODO("Not yet implemented")
 }
 
 @Composable
-fun AdminDepartmentsScreen(x0: MainViewModel) {
+private fun CourseDialog(onDismiss: () -> Unit, onSave: (String, String, Int, String?) -> Unit) {
+    /**
+     * by keyword
+     *
+     * Kotlin delegation
+     *
+     * Instead of:
+     *
+     * val creditsState = remember { mutableStateOf("3") }
+     * creditsState.value = "4"
+     *
+     * You write:
+     *
+     * var credits by remember { mutableStateOf("3") }
+     *
+     * Now you can use it like a normal variable
+     */
+    var name    by remember { mutableStateOf("") }
+    var code    by remember { mutableStateOf("") }
+    var credits by remember { mutableStateOf("3") } //Initial value = "3"
+    var desc    by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Course") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it },
+                    label = { Text("Course Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = code, onValueChange = { code = it.uppercase() },
+                    label = { Text("Code (e.g. CS301)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = credits, onValueChange = { credits = it },
+                    label = { Text("Credit Hours") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = desc, onValueChange = { desc = it },
+                    label = { Text("Description (optional)") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val cr = credits.toIntOrNull() ?: 3 //“Convert credits(String) to integer safely; if it fails, use 3 as default”
+                if (name.isNotBlank() && code.isNotBlank()) onSave(name.trim(), code.trim(), cr, desc.ifBlank { null }/*Converts empty input → null*/)
+            }) { Text("Create") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN PROFESSORS
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun AdminProfessorsScreen(x0: MainViewModel) {
     TODO("Not yet implemented")
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfessorDialog(
+    departments: List<oop.project.unislotandroid.data.model.DepartmentResponse>,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String?, Long?) -> Unit
+) {
+    // Local UI state for form inputs
+    var name    by remember { mutableStateOf("") }
+    var email   by remember { mutableStateOf("") }
+    var qual    by remember { mutableStateOf("") }
+    var deptId  by remember { mutableStateOf<Long?>(null) }
+    var expanded by remember { mutableStateOf(false) } // controls dropdown visibility
+    // Derived value: finds the department object based on selected deptId
+    // Recomputed on every recomposition (not stored state)
+    val selectedDept = departments.find { it.id == deptId }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,// Called when user taps outside or presses back → closes dialog
+        title = { Text("New Professor") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it },
+                    label = { Text("Full Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = email, onValueChange = { email = it },
+                    label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = qual, onValueChange = { qual = it },
+                    label = { Text("Qualification (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                //Simple mental structure
+                //ExposedDropdownMenuBox
+                //    ├── OutlinedTextField (anchor / clickable field)
+                //    └── ExposedDropdownMenu (dropdown list)
+                //            ├── DropdownMenuItem
+                //            └── DropdownMenuItem (loop)
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded/*(// toggles dropdown open/close when field is clicked)*/ = it }) {
+                    // Anchor field (looks like input but acts like dropdown)
+                    OutlinedTextField(
+                        value = selectedDept?.name
+                            ?: "Select department (optional)",
+                        // Shows selected department name OR placeholder
+
+                        onValueChange = {}, // no typing allowed
+                        readOnly = true,    // prevents keyboard
+
+                        label = { Text("Department") },
+
+                        // Dropdown arrow icon (rotates automatically)
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded)
+                        },
+
+                        modifier = Modifier
+                            .menuAnchor()   // attaches menu to this field
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(text = { Text("None") }, onClick = { deptId = null; expanded = false })
+                        departments.forEach { d ->
+                            DropdownMenuItem(
+                                text    = { Text(d.name) },
+                                onClick = { deptId = d.id; expanded = false }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (name.isNotBlank() && email.isNotBlank())
+                    onSave(name.trim(), email.trim(), qual.ifBlank { null }, deptId)
+            }) { Text("Create") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
 
