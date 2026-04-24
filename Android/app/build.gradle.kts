@@ -17,7 +17,7 @@ android {
         versionName   = "1.0"
 
         // Change this to your backend server address
-        buildConfigField("String", "BASE_URL", "\"http://10.7.168.59:8080/\"")
+        buildConfigField("String", "BASE_URL", "\"http://10.7.168.42:8080/\"")
     }
 
     buildTypes {

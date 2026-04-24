@@ -163,13 +163,11 @@ fun AppRoot(vm: MainViewModel) {
                         // Launch a coroutine in UI scope to perform a suspend operation
                         // drawerState.open() is a suspend function → cannot be called directly
                         // So we use scope.launch { ... }
-                        LaunchedEffect (Unit) { //added myself
                             scope.launch {
                                 drawerState.open()   // Opens the navigation drawer
                             }
                             //launch            → manual coroutine (you control when it runs)
                             //LaunchedEffect    → lifecycle-aware side-effect (Compose controls when it runs)
-                        }
                     }
                 }
             }

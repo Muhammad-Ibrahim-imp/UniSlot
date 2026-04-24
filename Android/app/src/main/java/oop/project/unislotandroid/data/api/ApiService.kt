@@ -30,11 +30,25 @@ interface ApiService {
     @DELETE("api/admin/degrees/{degreeId}/courses/{courseId}")
     suspend fun removeCourseFromDegree(@Path("degreeId") degreeId: Long, @Path("courseId") courseId: Long): ApiResponse<Void>
 
+    //edit-update and delete
+    @PUT("api/admin/degrees/{id}")
+    suspend fun updateDegree(@Path("id") id: Long, @Body r: CreateDegreeRequest): ApiResponse<DegreeResponse>
+
+    @DELETE("api/admin/degrees/{id}")
+    suspend fun deleteDegree(@Path("id") id: Long): ApiResponse<Void>
+
     // ── Courses ───────────────────────────────────────────────────────────────
     @GET("api/admin/courses")
     suspend fun getCourses(): ApiResponse<List<CourseResponse>>
     @POST("api/admin/courses")
     suspend fun createCourse(@Body r: CreateCourseRequest): ApiResponse<CourseResponse>
+
+    //edit-update and delete
+    @PUT("api/admin/courses/{id}") // edit: update course endpoint
+    suspend fun updateCourse(@Path("id") id: Long, @Body r: CreateCourseRequest): ApiResponse<CourseResponse>
+
+    @DELETE("api/admin/courses/{id}")
+    suspend fun deleteCourse(@Path("id") id: Long): ApiResponse<Void>
 
     // ── Professors ────────────────────────────────────────────────────────────
     @GET("api/admin/professors")
@@ -45,6 +59,13 @@ interface ApiService {
     suspend fun createProfessor(@Body r: CreateProfessorRequest): ApiResponse<ProfessorResponse>
     @GET("api/admin/professors/evaluation-ranking")
     suspend fun getEvaluationRanking(): ApiResponse<List<ProfessorResponse>>
+    //edit-update and delete
+    @PUT("api/admin/professors/{id}") // edit: update professor endpoint
+    suspend fun updateProfessor(@Path("id") id: Long, @Body r: CreateProfessorRequest): ApiResponse<ProfessorResponse>
+    @DELETE("api/admin/professors/{id}")
+    suspend fun deleteProfessor(@Path("id") id: Long): ApiResponse<Void>
+
+
 
     // ── Slots (new model: one slot = one section with lectures list) ───────────
     @GET("api/admin/slots/by-course/{courseId}")
