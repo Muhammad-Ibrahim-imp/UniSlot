@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,7 +43,10 @@ fun AdminDegreesScreen(vm: MainViewModel) {
     var showAddCourse by remember { mutableStateOf<DegreeResponse?>(null) }
     var feedbackMsg  by remember { mutableStateOf("") }
     var isError      by remember { mutableStateOf(false) }
-
+    //edit-update and delete
+    var deleteTarget  by remember { mutableStateOf<DegreeResponse?>(null) }
+    var editDegreeTarget by remember { mutableStateOf<DegreeResponse?>(null) }
+    //======================
     LaunchedEffect(selDept) { selDept?.let { vm.loadDegrees(it.id) } }
 
     Column(Modifier.fillMaxSize()) {
@@ -102,27 +106,63 @@ fun AdminDegreesScreen(vm: MainViewModel) {
                             vm.removeCourseFromDegree(degree.id, courseId) { ok, msg ->
                                 isError = !ok; feedbackMsg = msg
                             }
-                        }
+                        },
+                        //edit-update and delete
+                        onDelete = { deleteTarget = degree },
+                        onEdit   = { editDegreeTarget = degree; showNewDegree = true }
+                        //======================
                     )
                 }
                 item { Spacer(Modifier.height(80.dp)) }
             }
         }
     }
+    //edit- delete
+    deleteTarget?.let { degree ->
+        ConfirmDeleteDialog(
+            title   = "Delete Degree",
+            message = "Delete \"${degree.name}\" (${degree.code})?\n\nThis will fail if students are enrolled.",
+            onConfirm = {
+                deleteTarget = null
+                selDept?.let { dept ->
+                    vm.deleteDegree(degree.id, dept.id) { ok, msg -> isError = !ok; feedbackMsg = msg }
+                }
+            },
+            onDismiss = { deleteTarget = null }
+        )
+    }
+    //======================
 
     // New Degree Dialog
+    //edit- update
     if (showNewDegree && selDept != null) {
-        NewDegreeDialog(
+        oop.project.unislotandroid.ui.screens.NewDegreeDialog(
             departmentName = selDept!!.name,
-            onDismiss = { showNewDegree = false },
+            existing = editDegreeTarget, // edit: pass existing for pre-fill
+            onDismiss = {
+                showNewDegree = false; editDegreeTarget = null
+            }, // edit: clear on dismiss
             onSave = { name, code, years ->
-                vm.createDegree(name, code, selDept!!.id, years) { ok, msg ->
-                    isError = !ok; feedbackMsg = msg
+                if (editDegreeTarget != null) { // edit: update if editing
+                    vm.updateDegree(
+                        editDegreeTarget!!.id,
+                        name,
+                        code,
+                        selDept!!.id,
+                        years
+                    ) { ok, msg ->
+                        isError = !ok; feedbackMsg = msg
+                    }
+                } else {
+                    vm.createDegree(name, code, selDept!!.id, years) { ok, msg ->
+                        isError = !ok; feedbackMsg = msg
+                    }
                 }
-                showNewDegree = false
+                showNewDegree = false; editDegreeTarget = null // edit: clear after save
             }
         )
     }
+    //======================
 
     // Add Course to Degree Dialog
     showAddCourse?.let { deg ->
@@ -154,7 +194,12 @@ private fun DegreeCard(
     degree: DegreeResponse,
     detail: DegreeDetailResponse?,
     onAddCourse: () -> Unit,
-    onRemoveCourse: (Long, String) -> Unit
+    onRemoveCourse: (Long, String) -> Unit,
+    //edit-update and delete
+    onDelete: () -> Unit = {},
+    onEdit: () -> Unit = {}
+    //======================
+
 ) {
     Card(
         modifier  = Modifier.fillMaxWidth(),
@@ -178,6 +223,16 @@ private fun DegreeCard(
                     Spacer(Modifier.width(4.dp))
                     Text("Add Course", fontSize = 12.sp)
                 }
+                //edit-update and delete
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit Degree",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete Degree", tint = RedBadge)
+                }
+                //======================
             }
 
             if (detail?.semesters != null && detail.semesters.isNotEmpty()) {
@@ -217,13 +272,19 @@ private fun DegreeCard(
 @Composable
 private fun NewDegreeDialog(
     departmentName: String,
+    //edit-update and delete
+    existing: DegreeResponse? = null,
+    //======================
     onDismiss: () -> Unit,
     onSave: (String, String, Int) -> Unit
 ) {
-    var name  by remember { mutableStateOf("") }
-    var code  by remember { mutableStateOf("") }
-    var years by remember { mutableStateOf("4") }
-
+    //edit-update and delete
+    var name  by remember { mutableStateOf(existing?.name ?: "") }
+    var code  by remember { mutableStateOf(existing?.code ?: "") }
+    var years by remember { mutableStateOf(existing?.durationYears?.toString() ?: "4") }
+    //======================
+    //edit-update and delete
+    //======================
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Column { Text("New Degree"); Text(departmentName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
@@ -249,7 +310,7 @@ private fun NewDegreeDialog(
             Button(onClick = {
                 if (name.isNotBlank() && code.isNotBlank())
                     onSave(name.trim(), code.trim(), years.toIntOrNull() ?: 4)
-            }) { Text("Create Degree") }
+            }) { Text(if (existing != null) "Save Changes" else "Create Degree") }//edit-update and delete
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -321,6 +382,25 @@ private fun AddCourseDialog(
                 },
                 enabled = selCourse != null && semester.toIntOrNull()?.let { it in 1..maxSem } == true
             ) { Text("Add Course") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED: Confirmation Delete Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun ConfirmDeleteDialog(title: String, message: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title  = { Text(title) },
+        text   = { Text(message) },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors  = ButtonDefaults.buttonColors(containerColor = RedBadge)
+            ) { Text("Delete", color = Color.White) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
