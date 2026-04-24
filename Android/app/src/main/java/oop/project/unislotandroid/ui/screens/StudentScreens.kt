@@ -1,24 +1,38 @@
 package oop.project.unislotandroid.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -112,9 +126,184 @@ fun StudentDashboardScreen(vm: MainViewModel, onNavigate: (String) -> Unit) {
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUDENT COURSES  (pick a slot from the available ones)
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun StudentScheduleScreen(x0: MainViewModel) {
-    TODO("Not yet implemented")
+fun StudentCoursesScreen(vm: MainViewModel) {
+    val coursesState  by vm.myCourses.collectAsState()
+    val availSlots    by vm.availableSlots.collectAsState()
+    val enrollments   by vm.myEnrollments.collectAsState()
+    val slotOpState   by vm.slotOpState.collectAsState()
+    LaunchedEffect(Unit) { vm.loadMyCourses(); vm.loadMyEnrollments() }
+
+    var selectedCourse by remember { mutableStateOf<CourseResponse?>(null) }
+    var feedbackMsg    by remember { mutableStateOf("") }
+    var isError        by remember { mutableStateOf(false) }
+
+    LaunchedEffect(slotOpState) {
+        when (slotOpState) {
+            is UiState.Success -> { feedbackMsg = "✓ Enrolled!"; isError = false; vm.resetSlotOp() }
+            is UiState.Error   -> { feedbackMsg = (slotOpState as UiState.Error).message; isError = true; vm.resetSlotOp() }
+            else -> {}
+        }
+    }
+
+    val enrolledCodes       = enrollments.map { it.slotGroupCode }.toSet()
+    val enrolledCourseCodes = enrollments.filter { !it.dropped }.map { it.courseCode }.toSet()
+
+    Column(Modifier.fillMaxSize()) {
+        if (feedbackMsg.isNotBlank()) {
+            Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                if (isError) ErrorBanner(feedbackMsg) else SuccessBanner(feedbackMsg)
+            }
+        }
+
+        when (coursesState) {
+            is UiState.Loading -> LoadingScreen()
+            is UiState.Error   -> ErrorBanner((coursesState as UiState.Error).message)
+            is UiState.Success -> {
+                val courses = (coursesState as UiState.Success).data
+
+                if (selectedCourse == null) {
+                    // Course list
+                    LazyColumn(contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        item { Text("My Courses", fontWeight = FontWeight.SemiBold) }
+                        if (courses.isEmpty()) {
+                            item { EmptyState("No courses available for your semester.") }
+                        } else {
+                            items(courses) { course ->
+                                val enrolled = course.courseCode in enrolledCourseCodes
+                                Card(
+                                    onClick = { selectedCourse = course; vm.loadAvailableSlots(course.id) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    elevation = CardDefaults.cardElevation(2.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (enrolled) Color(0xFFF0FDF4)
+                                        else MaterialTheme.colorScheme.surface)
+                                ) {
+                                    Row(Modifier.padding(14.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(course.name, fontWeight = FontWeight.Medium)
+                                            Text("${course.courseCode} · ${course.creditHours} cr",
+                                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        when {
+                                            enrolled -> StatusBadge("✓ Enrolled", "PAID")
+                                            course.availableSlotGroups == 0 -> StatusBadge("No slots", "UNPAID")
+                                            else -> StatusBadge("${course.availableSlotGroups} slot${if (course.availableSlotGroups != 1) "s" else ""}", "INFO")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Slot list for selected course
+                    Column(Modifier.fillMaxSize()) {
+                        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { selectedCourse = null }) {
+                                Icon(Icons.Default.ArrowBack, null)
+                            }
+                            Column {
+                                Text(selectedCourse!!.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                                Text("${availSlots.size} slot${if (availSlots.size != 1) "s" else ""} available",
+                                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        HorizontalDivider()
+
+                        if (availSlots.isEmpty()) {
+                            EmptyState("No available slots for this course right now.")
+                        } else {
+                            LazyColumn(contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(availSlots) { slot ->
+                                    AvailableSlotCard(
+                                        slot         = slot,
+                                        isEnrolled   = slot.slotGroupCode in enrolledCodes,
+                                        isSelecting  = slotOpState is UiState.Loading,
+                                        onSelect     = { vm.selectSlot(slot.slotGroupCode) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+}
+
+@Composable
+private fun AvailableSlotCard(
+    slot: LectureSlotResponse,
+    isEnrolled: Boolean,
+    isSelecting: Boolean,
+    onSelect: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(slot.slotName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("👨‍🏫 ${slot.professorName}", fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp))
+                }
+                when {
+                    isEnrolled -> StatusBadge("✓ Enrolled", "PAID")
+                    slot.isFull -> StatusBadge("Full", "UNPAID")
+                    else -> StatusBadge("${slot.availableSeats} left", "INFO")
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text("Lectures (${slot.lectures.size})",
+                fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
+
+            slot.lectures.sortedBy { DAYS_ORDER.indexOf(it.dayOfWeek) }.forEach { lec ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            DAY_S[lec.dayOfWeek] ?: lec.dayOfWeek.take(3),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Text("🕐 ${lec.startTime}–${lec.endTime}", fontSize = 12.sp)
+                    if (!lec.venue.isNullOrBlank())
+                        Text("📍 ${lec.venue}", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            CapacityBar(slot.enrolledCount, slot.maxCapacity)
+
+            if (!isEnrolled && !slot.isFull) {
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onSelect, enabled = !isSelecting,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text(if (isSelecting) "Enrolling…" else "Enrol in ${slot.slotName}")
+                }
+            }
+        }
+    }
 }
 
 @Composable
