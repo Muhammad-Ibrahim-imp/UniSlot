@@ -23,13 +23,19 @@ export const deleteDepartment = id => api.delete(`/admin/departments/${id}`)
 export const getDegreesByDept = deptId => api.get(`/admin/degrees/by-department/${deptId}`).then(r => r.data.data)
 export const getDegreeById    = id => api.get(`/admin/degrees/${id}`).then(r => r.data.data)
 export const createDegree     = d => api.post('/admin/degrees', d).then(r => r.data.data)
+export const updateDegree     = (id, d) => api.put(`/admin/degrees/${id}`, d).then(r => r.data.data) // edit: update degree
+export const deleteDegree     = id => api.delete(`/admin/degrees/${id}`)
 export const addCourseToDegree = d => api.post('/admin/degrees/add-course', d).then(r => r.data)
 export const removeCourseFromDegree = (degreeId, courseId) => api.delete(`/admin/degrees/${degreeId}/courses/${courseId}`)
 export const getCourses    = () => api.get('/admin/courses').then(r => r.data.data)
 export const createCourse  = d => api.post('/admin/courses', d).then(r => r.data.data)
+export const updateCourse  = (id, d) => api.put(`/admin/courses/${id}`, d).then(r => r.data.data) // edit: update course
+export const deleteCourse  = id => api.delete(`/admin/courses/${id}`)
 export const searchCourses = (query) => api.get(`/admin/courses/search`, { params: { query } }).then(r => r.data.data)
 export const getProfessors = () => api.get('/admin/professors').then(r => r.data.data)
 export const createProfessor = d => api.post('/admin/professors', d).then(r => r.data.data)
+export const updateProfessor = (id, d) => api.put(`/admin/professors/${id}`, d).then(r => r.data.data) // edit: update professor
+export const deleteProfessor = id => api.delete(`/admin/professors/${id}`)
 export const getProfessorsByDept = deptId => api.get(`/admin/professors/by-department/${deptId}`).then(r => r.data.data)
 export const getEvaluationRanking = () => api.get('/admin/professors/evaluation-ranking').then(r => r.data.data)
 // Slots — new model: one slot per call, with schedule[] array

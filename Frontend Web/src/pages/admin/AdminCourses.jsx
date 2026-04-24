@@ -1,25 +1,35 @@
 import React, { useEffect, useState } from 'react'
-import { getCourses, createCourse} from '../../api/client'
+import { getCourses, createCourse, searchCourses, deleteCourse } from '../../api/client'
 
 export default function AdminCourses() {
-  const [items, setItems]     = useState([])
+  const [courses, setcourses]     = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [modal, setModal]     = useState(false)
   const [form, setForm]       = useState({ name: '', courseCode: '', creditHours: 3, description: '' })
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
+  const [editTarget, setEditTarget] = useState(null)   // edit: track which course is being edited
+  const [isErr, setIsErr]       = useState(false)
+  const [feedback, setFeedback] = useState('')
 
-  const load = () => getCourses().then(setItems).finally(() => setLoading(false))
+  const load = () => getCourses().then(setcourses).finally(() => setLoading(false))
   useEffect(() => { load() }, [])
 
-  const filtered = search
-    ? items.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) ||
-                        c.courseCode.toLowerCase().includes(search.toLowerCase()))
-    : items
+  const filtered =  courses.filter(c =>
+    !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.courseCode.toLowerCase().includes(search.toLowerCase()))
 
   function openCreate() {
-    setForm({ name: '', courseCode: '', creditHours: 3, description: '' })
+    setEditTarget(null)
+    setForm({ name:'', courseCode:'', creditHours:3, description:'' })
+    setError('')
+    setModal(true)
+  }
+
+   function openEdit(course) {
+    setEditTarget(course)
+    setForm({ name: course.name, courseCode: course.courseCode, creditHours: course.creditHours, description: course.description || '' })
     setError('')
     setModal(true)
   }
@@ -28,14 +38,27 @@ export default function AdminCourses() {
     if (!form.name.trim() || !form.courseCode.trim()) { setError('Name and code are required.'); return }
     setSaving(true); setError('')
     try {
-      await createCourse({ ...form, creditHours: Number(form.creditHours) })
-      await load()
-      setModal(false)
+     if (editTarget) {
+        // edit: call update instead of create when editing
+        await updateCourse(editTarget.id, { ...form, creditHours: Number(form.creditHours) })
+        setFeedback(`"${form.name}" updated!`); setIsErr(false)
+      } else {
+        await createCourse({ ...form, creditHours: Number(form.creditHours) })
+        setFeedback('Course created!'); setIsErr(false)
+      }
+      await load(); setModal(false)
     } catch (e) {
       setError(e.response?.data?.message || 'Save failed.')
     } finally {
       setSaving(false)
     }
+  }
+  async function handleDelete(course) {
+    if (!confirm(`Delete course "${course.name}" (${course.courseCode})?\nThis will fail if the course has active slots.`)) return // edit: delete confirmation
+    try {
+      await deleteCourse(course.id); await load() // edit: delete then reload
+      setFeedback(`"${course.name}" deleted.`); setIsErr(false)
+    } catch(e) { setFeedback(e.response?.data?.message || 'Delete failed.'); setIsErr(true) }
   }
 
   return (
@@ -58,6 +81,10 @@ export default function AdminCourses() {
           <button className="btn btn-primary" onClick={openCreate}>+ New Course</button>
         </div>
 
+        {feedback && <div className={`alert alert-${isErr?'error':'success'}`} style={{ marginBottom:16 }}>
+        {feedback} <button className='modal-close' onClick={() => setFeedback('')} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer' }}>×</button>
+      </div>}
+
         {loading ? <div className="loading">Loading…</div> : (
           <div className="table-wrap">
             <table>
@@ -72,8 +99,12 @@ export default function AdminCourses() {
                       <td><code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{c.courseCode}</code></td>
                       <td><strong>{c.name}</strong>{c.description && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{c.description.slice(0, 60)}{c.description.length > 60 ? '…' : ''}</div>}</td>
                       <td><span className="badge badge-blue">{c.creditHours} cr</span></td>
-                      <td>{c.availableSlotGroups}</td>
                       <td style={{ fontSize: 12 }}>{c.offeredInDegrees?.join(', ') || '—'}</td>
+                      <td>{c.availableSlotGroups > 0 ? <span className="badge badge-green">{c.availableSlotGroups} slots</span> : <span className="badge badge-gray">No slots</span>}</td>
+                      <td style={{ display:'flex', gap:6 }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => openEdit(c)}>Edit</button> {/* edit: edit button */}
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c)}>Delete</button> {/* edit: delete button */}
+                     </td>
                     </tr>
                   ))}
               </tbody>
@@ -86,7 +117,7 @@ export default function AdminCourses() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setModal(false)}>
           <div className="modal">
             <div className="modal-header">
-              <h3>New Course</h3>
+               <h3>{editTarget ? 'Edit Course' : 'Add Course'}</h3> {/* edit: dynamic title */}
               <button className='modal-close' onClick={() => setModal(false)}>×</button>
             </div>
             <div className="modal-body">
@@ -117,7 +148,7 @@ export default function AdminCourses() {
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : 'Create Course'}
+                {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Create Course'} {/* edit: dynamic button label */}
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   getDepartments, getDegreesByDept, getDegreeById, createDegree,
-  getCourses, addCourseToDegree, removeCourseFromDegree
+  getCourses, addCourseToDegree, removeCourseFromDegree,deleteDegree, updateDegree
 } from '../../api/client'
 
 export default function AdminDegrees() {
@@ -15,11 +15,13 @@ export default function AdminDegrees() {
   // Modals
   const [showNewDegree, setShowNewDegree] = useState(false)
   const [showAddCourse, setShowAddCourse] = useState(null) // degreeId
+  const [editDegreeTarget, setEditDegreeTarget] = useState(null) // edit: track which degree is being edited
   const [degreeForm, setDegreeForm] = useState({ name: '', code: '', durationYears: 4 })
   const [courseForm, setCourseForm] = useState({ courseId: '', semesterNumber: 1, isCompulsory: true })
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState('')
   const [feedback, setFeedback]     = useState('')
+  const [isErr, setIsErr]           = useState(false)
 
   useEffect(() => {
     Promise.all([getDepartments(), getCourses()])
@@ -43,26 +45,55 @@ export default function AdminDegrees() {
 
   useEffect(() => { loadDegrees(selDept) }, [selDept, loadDegrees])
 
+  // edit: open create modal blank
+  function openCreateDegree() {
+    setEditDegreeTarget(null)
+    setDegreeForm({ name: '', code: '', durationYears: 4 })
+    setError('')
+    setShowNewDegree(true)
+  }
+  // edit: open edit modal pre-filled
+  function openEditDegree(deg) {
+    setEditDegreeTarget(deg)
+    setDegreeForm({ name: deg.name, code: deg.code, durationYears: deg.durationYears })
+    setError('')
+    setShowNewDegree(true)
+  }
+
   async function handleCreateDegree() {
-    if (!degreeForm.name.trim() || !degreeForm.code.trim() || !selDept) {
+    if (!degreeForm.name.trim() || !degreeForm.code.trim() || (!selDept && !editDegreeTarget)) {
       setError('Name, code and department are required.'); return
     }
     setSaving(true); setError('')
     try {
-      await createDegree({
-        name: degreeForm.name.trim(),
-        code: degreeForm.code.trim().toUpperCase(),
-        departmentId: Number(selDept),
-        durationYears: Number(degreeForm.durationYears)
-      })
+      if (editDegreeTarget) {
+        // edit: update instead of create when editing — department cannot be changed via edit
+        await updateDegree(editDegreeTarget.id, {
+          name: degreeForm.name.trim(),
+          code: degreeForm.code.trim().toUpperCase(),
+          departmentId: editDegreeTarget.departmentId || Number(selDept), // edit: keep existing dept
+          durationYears: Number(degreeForm.durationYears)
+        })
+        setFeedback(`"${degreeForm.name}" updated!`); setIsErr(false)
+      }
+       else {
+        await createDegree({
+          name: degreeForm.name.trim(),
+          code: degreeForm.code.trim().toUpperCase(),
+          departmentId: Number(selDept),
+          durationYears: Number(degreeForm.durationYears)
+        })
+        setFeedback(`Degree "${degreeForm.name}" created!`); setIsErr(false)
+      }
       setShowNewDegree(false)
       setDegreeForm({ name: '', code: '', durationYears: 4 })
       await loadDegrees(selDept)
-      setFeedback('Degree created successfully!')
     } catch(e) {
       setError(e.response?.data?.message || 'Failed to create degree.')
     } finally { setSaving(false) }
   }
+
+
 
   async function handleAddCourse() {
     if (!courseForm.courseId) { setError('Please select a course.'); return }
@@ -83,6 +114,7 @@ export default function AdminDegrees() {
       setCourseForm({ courseId: '', semesterNumber: 1, isCompulsory: true })
       // Refresh full degree
       const updated = await getDegreeById(showAddCourse)
+      // it is done so that added course must appear in the degree after adding.
       setFullDegrees(prev => ({ ...prev, [showAddCourse]: updated }))
       setFeedback('Course added to degree!')
     } catch(e) {
@@ -197,6 +229,34 @@ export default function AdminDegrees() {
                   >
                     + Add Course
                   </button>
+                    {/* EDIT */}
+                        <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => openEditDegree(deg)}
+                        >
+                    Edit
+                  </button>
+
+                  {/* DELETE */}
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={async () => {
+                      if (!confirm(`Delete degree "${deg.name}" (${deg.code})?`)) return
+                      try {
+                        await deleteDegree(deg.id)
+                        await loadDegrees(selDept)
+                        setFeedback(`"${deg.name}" deleted.`)
+                        setIsErr(false)
+                      } catch (e) {
+                        setFeedback(e.response?.data?.message || 'Delete failed.')
+                        setIsErr(true)
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                    
+
                 </div>
                 <div className="degree-card-body">
                   {semesters.length === 0 ? (
@@ -229,7 +289,7 @@ export default function AdminDegrees() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowNewDegree(false)}>
           <div className="modal">
             <div className="modal-header">
-              <div><h3>Create New Degree</h3><p>Under {deptObj?.name}</p></div>
+              <div><h3>{editDegreeTarget ? 'Edit Degree' : 'Create New Degree'}</h3><p>Under {deptObj?.name}</p></div> {/* edit: dynamic title */}
               <button className="modal-close" onClick={() => setShowNewDegree(false)}>×</button>
             </div>
             <div className="modal-body">
@@ -262,7 +322,7 @@ export default function AdminDegrees() {
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setShowNewDegree(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleCreateDegree} disabled={saving}>
-                {saving ? 'Creating…' : 'Create Degree'}
+               {saving ? 'Saving…' : editDegreeTarget ? 'Save Changes' : 'Create Degree'} {/* edit: dynamic button label */}
               </button>
             </div>
           </div>

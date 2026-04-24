@@ -1,19 +1,22 @@
 import React, { useEffect, useState } from 'react'
-import { getProfessors, createProfessor, getDepartments } from '../../api/client'
+import { getProfessors, createProfessor,updateProfessor,deleteProfessor ,getDepartments } from '../../api/client'
 
 export default function AdminProfessors() {
-  const [items, setItems]       = useState([])
-  const [depts, setDepts]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [modal, setModal]       = useState(false)
-  const [form, setForm]         = useState({ name: '', email: '', qualification: '', departmentId: '' })
-  const [saving, setSaving]     = useState(false)
+  const [professors, setProfessors] = useState([])
+  const [depts, setDepts]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [modal, setModal]           = useState(false)
+  const [form, setForm]             = useState({ name: '', email: '', qualification: '', departmentId: '' })
+  const [saving, setSaving]         = useState(false)
   const [error, setError]       = useState('')
-  const [filterDept, setFilter] = useState('')
+  const [editTarget, setEditTarget] = useState(null) // edit: track which professor is being edited
+  const [isErr, setIsErr]           = useState(false)
+  const [feedback, setFeedback]     = useState('')
+  const [search, setSearch]         = useState('')
 
   const load = () =>
     Promise.all([getProfessors(), getDepartments()])
-      .then(([profs, d]) => { setItems(profs); setDepts(d) })
+      .then(([profs, d]) => { setProfessors(profs); setDepts(d) })
       .finally(() => setLoading(false))
 
       // we are not using await when calling load() because we want to load professors and departments in parallel, and set loading to false only after both are done
@@ -22,14 +25,28 @@ export default function AdminProfessors() {
         load() starts API calls
         React does NOT wait
         UI renders (maybe with loading state)
-        When data arrives → setItems, setDepts
+        When data arrives → setProfessors, setDepts
         React re-renders automatically 
         */}
   useEffect(() => { load() }, []) 
 
-  const filtered = filterDept
-    ? items.filter(p => p.departmentName === filterDept)
-    : items
+  const filtered = professors.filter(p =>
+    !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
+    (p.departmentName||'').toLowerCase().includes(search.toLowerCase()))
+
+  function openEdit(prof) {
+    setEditTarget(prof)
+    setForm({ name: prof.name, email: prof.email, qualification: prof.qualification || '', departmentId: prof.departmentId || '' })
+    setError('')
+    setModal(true)
+  }
+
+  function openCreate() {
+    setEditTarget(null)
+    setForm({ name:'', email:'', qualification:'', departmentId:'' })
+    setError('')
+    setModal(true)
+  }
 
   async function handleSave() {
     if (!form.name.trim() || !form.email.trim()) {
@@ -39,14 +56,29 @@ export default function AdminProfessors() {
     setSaving(true);
     setError('');
     try {
-      await createProfessor({ ...form, departmentId: form.departmentId ? Number(form.departmentId) : undefined })
-      await load()
-      setModal(false)
+      const payload = { ...form, departmentId: form.departmentId ? Number(form.departmentId) : null }
+      if (editTarget) {
+        await updateProfessor(editTarget.id, payload) // edit: call update when editing
+        setFeedback(`"${form.name}" updated!`); setIsErr(false)
+      } else {
+        await createProfessor(payload)
+        setFeedback('Professor registered!');
+        setIsErr(false)
+      }
+      await load(); setModal(false)
     } catch (e) {
       setError(e.response?.data?.message || 'Save failed.')
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleDelete(prof) {
+    if (!confirm(`Delete professor "${prof.name}"?\nThis will fail if they have slots with enrolled students.`)) return // edit: delete confirmation
+    try {
+      await deleteProfessor(prof.id); await load() // edit: delete then reload
+      setFeedback(`"${prof.name}" deleted.`); setIsErr(false)
+    } catch(e) { setFeedback(e.response?.data?.message || 'Delete failed.'); setIsErr(true) }
   }
 
   function fillRate(p) {
@@ -73,6 +105,10 @@ export default function AdminProfessors() {
           </button>
         </div>
 
+         {feedback && <div className={`alert alert-${isErr?'error':'success'}`} style={{ marginBottom:16 }}>
+        {feedback} <button onClick={() => setFeedback('')} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer' }}>×</button>
+      </div>}
+
         {loading ? <div className="loading">Loading…</div> : (
           <div className="table-wrap">
             <table>
@@ -95,6 +131,10 @@ export default function AdminProfessors() {
                             {p.totalSeatsFilled}/{p.totalSeatsOffered} ({rate}%)
                           </span>
                         </td>
+                        <td style={{ display:'flex', gap:6 }}>
+                          <button className="btn btn-outline btn-sm" onClick={() => openEdit(p)}>Edit</button> {/* edit: edit button */}
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p)}>Delete</button> {/* edit: delete button */}
+                        </td>
                       </tr>
                     )
                   })}
@@ -108,7 +148,7 @@ export default function AdminProfessors() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setModal(false)}>
           <div className="modal">
             <div className="modal-header">
-              <h3>New Professor</h3>
+               <h3>{editTarget ? 'Edit Professor' : 'Register Professor'}</h3> {/* edit: dynamic title */}
               <button className="modal-close" onClick={() => setModal(false)}>×</button>
             </div>
             <div className="modal-body">
@@ -136,7 +176,7 @@ export default function AdminProfessors() {
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : 'Create Professor'}
+                 {saving ? 'Saving…' : editTarget ? 'Save Changes' : 'Register'} {/* edit: dynamic button label */}
               </button>
             </div>
           </div>
