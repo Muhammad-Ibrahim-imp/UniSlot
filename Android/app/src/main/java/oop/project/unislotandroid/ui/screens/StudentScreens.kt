@@ -533,14 +533,14 @@ private fun EnrollmentCard(
                 color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(4.dp))
 
-            enrollment.lectures.sortedBy { com.university.slotselector.ui.screens.DAYS_ORDER.indexOf(it.dayOfWeek) }.forEach { lec ->
+            enrollment.lectures.sortedBy { oop.project.unislotandroid.ui.screens.DAYS_ORDER.indexOf(it.dayOfWeek) }.forEach { lec ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(color = MaterialTheme.colorScheme.primaryContainer,
                         shape = MaterialTheme.shapes.small) {
                         Text(
-                            com.university.slotselector.ui.screens.DAY_S[lec.dayOfWeek] ?: lec.dayOfWeek.take(3),
+                            oop.project.unislotandroid.ui.screens.DAY_S[lec.dayOfWeek] ?: lec.dayOfWeek.take(3),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             fontSize = 11.sp, fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer)
