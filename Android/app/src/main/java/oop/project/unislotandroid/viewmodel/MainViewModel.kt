@@ -188,6 +188,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 onDone(true, "Course removed")
             }.onFailure { onDone(false, it.message ?: "Error") }
     }
+    //edit-update and delete
+    fun deleteDegree(id: Long, deptId: Long, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
+        runCatching { api.deleteDegree(id) }
+            .onSuccess { loadDegrees(deptId); onDone(true, "Degree deleted") }
+            .onFailure { onDone(false, it.message ?: "Error") }
+    }
+    fun updateDegree(id: Long, name: String, code: String, deptId: Long, years: Int, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
+        runCatching { api.updateDegree(id, CreateDegreeRequest(name, code, deptId, years)) }
+            .onSuccess { loadDegrees(deptId); onDone(true, "Degree updated") }
+            .onFailure { onDone(false, it.message ?: "Error") }
+    }
 
     // ── Courses ───────────────────────────────────────────────────────────────
     private val _courses = MutableStateFlow<UiState<List<CourseResponse>>>(UiState.Idle)
@@ -202,6 +213,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun createCourse(name: String, code: String, credits: Int, desc: String?, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
         runCatching { api.createCourse(CreateCourseRequest(name, code, credits, desc)) }
             .onSuccess { loadCourses(); onDone(true, "Course created") }
+            .onFailure { onDone(false, it.message ?: "Error") }
+    }
+    //edit-update and delete
+    fun deleteCourse(id: Long, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
+        runCatching { api.deleteCourse(id) }
+            .onSuccess { loadCourses(); onDone(true, "Course deleted") }
+            .onFailure { onDone(false, it.message ?: "Error") }
+    }
+    fun updateCourse(id: Long, name: String, code: String, credits: Int, desc: String?, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
+        runCatching { api.updateCourse(id, CreateCourseRequest(name, code, credits, desc)) }
+            .onSuccess { loadCourses(); onDone(true, "Course updated") }
             .onFailure { onDone(false, it.message ?: "Error") }
     }
 
@@ -226,6 +248,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun createProfessor(name: String, email: String, qual: String?, deptId: Long?, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
         runCatching { api.createProfessor(CreateProfessorRequest(name, email, qual, deptId)) }
             .onSuccess { loadProfessors(); onDone(true, "Professor created") }
+            .onFailure { onDone(false, it.message ?: "Error") }
+    }
+    //edit-update and delete
+    fun updateProfessor(id: Long, name: String, email: String, qual: String?, deptId: Long?, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
+        runCatching { api.updateProfessor(id, CreateProfessorRequest(name, email, qual, deptId)) }
+            .onSuccess { loadProfessors(); onDone(true, "Professor updated") }
+            .onFailure { onDone(false, it.message ?: "Error") }
+    }
+    fun deleteProfessor(id: Long, onDone: (Boolean, String) -> Unit) = viewModelScope.launch {
+        runCatching { api.deleteProfessor(id) }
+            .onSuccess { loadProfessors(); onDone(true, "Professor deleted") }
             .onFailure { onDone(false, it.message ?: "Error") }
     }
 
