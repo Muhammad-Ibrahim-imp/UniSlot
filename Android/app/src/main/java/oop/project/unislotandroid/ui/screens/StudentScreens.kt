@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -301,6 +302,270 @@ private fun AvailableSlotCard(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUDENT SCHEDULE
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun StudentScheduleScreen(vm: MainViewModel) {
+    val enrollments by vm.myEnrollments.collectAsState()
+    val slotOpState by vm.slotOpState.collectAsState() //slotOpState exists to control UI behavior during and after slot operations (loading, success, error).
+    val pdfState    by vm.pdfState.collectAsState()
+    val context     = LocalContext.current //This line is used in Jetpack Compose to get the Android Context.
+    LaunchedEffect(Unit) { vm.loadMyEnrollments() }
+
+    var feedbackMsg by remember { mutableStateOf("") }
+    var isError     by remember { mutableStateOf(false) }
+
+    // Handle slot drop result
+    LaunchedEffect(slotOpState) {
+        when (slotOpState) {
+            is UiState.Success -> { feedbackMsg = "Slot dropped."; isError = false; vm.resetSlotOp() }
+            is UiState.Error   -> { feedbackMsg = (slotOpState as UiState.Error).message; isError = true; vm.resetSlotOp() }
+            else -> {}
+        }
+    }
+
+    // Handle PDF download result
+    LaunchedEffect(pdfState) {
+        when (pdfState) {
+            is UiState.Success -> {
+                val bytes = (pdfState as UiState.Success<ByteArray>).data
+                savePdfAndOpen(context, bytes)
+                feedbackMsg = "Timetable PDF saved to Downloads"
+                isError = false
+                vm.resetPdfState()
+            }
+            is UiState.Error -> {
+                feedbackMsg = (pdfState as UiState.Error).message
+                isError = true
+                vm.resetPdfState()
+            }
+            else -> {}
+        }
+    }
+
+    val active = enrollments.filter { !it.dropped }
+
+    Column(Modifier.fillMaxSize()) {
+        // PDF download button row
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if (active.isEmpty()) "No slots enrolled"
+                else "${active.size} Course${if (active.size != 1) "s" else ""} Enrolled",
+                fontWeight = FontWeight.SemiBold, fontSize = 14.sp
+            )
+            Button(
+                onClick = { vm.downloadTimetablePdf() },
+                enabled = active.isNotEmpty() && pdfState !is UiState.Loading,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                if (pdfState is UiState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color.White, strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Downloading…", fontSize = 12.sp)
+                } else {
+                    Icon(Icons.Default.PictureAsPdf, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Download PDF", fontSize = 12.sp)
+                }
+            }
+        }
+
+        if (feedbackMsg.isNotBlank()) {
+            Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                if (isError) ErrorBanner(feedbackMsg) else SuccessBanner(feedbackMsg)
+            }
+        }
+
+        if (active.isEmpty()) {
+            EmptyState("No slots enrolled yet.\nGo to My Courses to get started.")
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(active) { enrollment ->
+                    EnrollmentCard(
+                        enrollment = enrollment,
+                        dropping   = slotOpState is UiState.Loading,
+                        onDrop     = { vm.dropSlot(enrollment.slotGroupCode) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Save PDF bytes to Downloads folder and open it with the device's PDF viewer.
+ */
+private fun savePdfAndOpen(context: Context, bytes: ByteArray) {
+    try {
+        // Generate a unique file name using current time
+        val fileName = "timetable_${System.currentTimeMillis()}.pdf"
+
+        // Check Android version
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // ================================
+            // ANDROID 10+ (Scoped Storage)
+            // ================================
+
+            // Create metadata for the file (name, type, status)
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName) // File name
+                put(MediaStore.Downloads.MIME_TYPE, "application/pdf") // File type
+                put(MediaStore.Downloads.IS_PENDING, 1) // Mark as "being written"
+            }
+
+            // Get system service to interact with MediaStore
+            val resolver = context.contentResolver
+
+            // Ask Android to create a file entry in Downloads and return its URI
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+
+            uri?.let {
+                // Open output stream and write PDF bytes into the file
+                resolver.openOutputStream(it)?.use { out ->
+                    out.write(bytes)
+                }
+
+                // Clear old metadata and update only IS_PENDING
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0) // Mark file as finished
+
+                // Tell Android: "File writing is complete, make it visible"
+                resolver.update(it, values, null, null)
+
+                // Create intent to open the PDF
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(it, "application/pdf") // File URI + type
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // Allow other apps to read
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) // Required if not in Activity
+                }
+
+                // Show chooser so user can pick PDF viewer app
+                context.startActivity(
+                    Intent.createChooser(intent, "Open Timetable PDF")
+                )
+            }
+
+        } else {
+            // ================================
+            // ANDROID 9 AND BELOW (Legacy)
+            // ================================
+
+            @Suppress("DEPRECATION")
+            // Get the public Downloads directory path
+            val dir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS
+            )
+
+            // Create directory if it doesn't exist
+            dir.mkdirs()
+
+            // Create file inside Downloads folder
+            val file = File(dir, fileName)
+
+            // Write PDF bytes directly into the file
+            FileOutputStream(file).use {
+                it.write(bytes)
+            }
+
+            // Convert file path to secure content URI using FileProvider
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider", // Must match manifest
+                file
+            )
+
+            // Create intent to open the PDF
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/pdf") // File URI + type
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // Allow access to other apps
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) // Required if not in Activity
+            }
+
+            // Launch chooser to open PDF
+            context.startActivity(
+                Intent.createChooser(intent, "Open Timetable PDF")
+            )
+        }
+
+    } catch (e: Exception) {
+        // Print error if something goes wrong
+        e.printStackTrace()
+    }
+}
+
+@Composable
+private fun EnrollmentCard(
+    enrollment: EnrollmentResponse,
+    dropping: Boolean,
+    onDrop: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(enrollment.slotName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(enrollment.courseName, fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${enrollment.courseCode} · ${enrollment.creditHours} cr",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                StatusBadge("${enrollment.creditHours} cr", "INFO")
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("👨‍🏫 ${enrollment.professorName}", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+
+            Text("Lectures (${enrollment.lectures.size})",
+                fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
+
+            enrollment.lectures.sortedBy { com.university.slotselector.ui.screens.DAYS_ORDER.indexOf(it.dayOfWeek) }.forEach { lec ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.small) {
+                        Text(
+                            com.university.slotselector.ui.screens.DAY_S[lec.dayOfWeek] ?: lec.dayOfWeek.take(3),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    Text("🕐 ${lec.startTime}–${lec.endTime}", fontSize = 12.sp)
+                    if (!lec.venue.isNullOrBlank())
+                        Text("📍 ${lec.venue}", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onDrop, enabled = !dropping,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = RedBadge),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(RedBadge))
+                //Compose uses Brush internally so the same API can support both simple colors and advanced graphics like gradients.
+            ) { Text(if (dropping) "Dropping…" else "Drop Slot") }
+        }
+    }
+}
+
+//private fun androidx.compose.foundation.BorderStroke.copy(brush: androidx.compose.ui.graphics.Brush) =
+//    androidx.compose.foundation.BorderStroke(this.width, brush)
 
 
 
