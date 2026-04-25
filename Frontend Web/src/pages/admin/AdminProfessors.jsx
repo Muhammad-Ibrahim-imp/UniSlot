@@ -95,7 +95,7 @@ export default function AdminProfessors() {
 
       <div className="card">
         <div className="toolbar">
-          <select style={{ width: 200 }} value={filterDept} onChange={e => setFilter(e.target.value)}>
+          <select style={{ width: 200 }} value={search} onChange={e => setSearch(e.target.value)}>
             <option value="">All Departments</option>
             {depts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
           </select>
