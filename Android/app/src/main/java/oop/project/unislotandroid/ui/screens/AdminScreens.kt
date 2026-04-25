@@ -20,10 +20,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import oop.project.unislotandroid.data.model.CourseResponse
+import oop.project.unislotandroid.data.model.ProfessorResponse
 import oop.project.unislotandroid.ui.theme.GreenBadge
 import oop.project.unislotandroid.ui.theme.RedBadge
 import oop.project.unislotandroid.viewmodel.UiState
 import kotlin.compareTo
+import kotlin.text.toLong
+import kotlin.toString
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN DASHBOARD
@@ -111,6 +115,7 @@ fun AdminDashboardScreen(vm: MainViewModel) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN DEPARTMENTS
 // ─────────────────────────────────────────────────────────────────────────────
+//delete AlertDialog can be added
 @Composable
 fun AdminDepartmentsScreen(vm: MainViewModel) {
     val state by vm.departments.collectAsState()
@@ -252,6 +257,10 @@ fun AdminCoursesScreen(vm: MainViewModel) {
     var showDialog  by remember { mutableStateOf(false) }
     var feedbackMsg by remember { mutableStateOf("") }
     var isError     by remember { mutableStateOf(false) }
+    //edit- delete and update
+    var deleteTarget by remember { mutableStateOf<CourseResponse?>(null) }
+    var editTarget   by remember { mutableStateOf<CourseResponse?>(null) }
+    //=======================
 
     Column(Modifier.fillMaxSize()) {
         if (feedbackMsg.isNotBlank()) {
@@ -262,29 +271,73 @@ fun AdminCoursesScreen(vm: MainViewModel) {
             is UiState.Success -> {
                 val items = (state as UiState.Success).data//Means:“I am sure the state is Success, so give me the list of professors inside it.”
                 //Cast state to Success and extract its data list.
-                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    item {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text("${items.size} Course(s)", fontWeight = FontWeight.SemiBold)
-                            FloatingActionButton(onClick = { showDialog = true },
-                                modifier = Modifier.size(40.dp), containerColor = MaterialTheme.colorScheme.primary) {
-                                Icon(Icons.Default.Add, null, tint = Color.White)
+                if (items.isEmpty()) {
+                    EmptyState("No courses yet. Tap + to add one.")
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${items.size} Course(s)", fontWeight = FontWeight.SemiBold)
+                                FloatingActionButton(
+                                    onClick = { showDialog = true },
+                                    modifier = Modifier.size(40.dp),
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Icon(Icons.Default.Add, null, tint = Color.White)
+                                }
                             }
                         }
-                    }
-                    items(items) { course ->
-                        Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
-                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(course.name, fontWeight = FontWeight.Medium)
-                                    Text("${course.courseCode} · ${course.creditHours} credits · ${course.availableSlotGroups} slot groups",
-                                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (!course.description.isNullOrBlank()) {
-                                        Text(course.description.take(80), fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 2.dp))
+                        items(items) { course ->
+                            Card(
+                                Modifier.fillMaxWidth(),
+                                elevation = CardDefaults.cardElevation(1.dp)
+                            ) {
+                                Row(
+                                    Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(course.name, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            "${course.courseCode} · ${course.creditHours} credits · ${course.availableSlotGroups} slot groups",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (course.availableSlotGroups > 0)
+                                            Text(
+                                                "${course.availableSlotGroups} slot(s) open",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        if (!course.description.isNullOrBlank()) {
+                                            Text(
+                                                course.description.take(80), fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
                                     }
+                                    // edit- update and delete
+                                    IconButton(onClick = {
+                                        editTarget = course; showDialog = true
+                                    }) {
+                                        Icon(
+                                            Icons.Default.Edit,
+                                            contentDescription = "Edit Course",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    IconButton(onClick = { deleteTarget = course }) {
+                                        Icon(Icons.Default.Delete, null, tint = RedBadge)
+                                    }
+                                    //==========================
                                 }
                             }
                         }
@@ -294,22 +347,50 @@ fun AdminCoursesScreen(vm: MainViewModel) {
             else -> {}
         }
     }
+    // edit- update and delete
+    deleteTarget?.let { course ->
+        ConfirmDeleteDialog(
+            title = "Delete Course",
+            message = "Delete \"${course.name}\" (${course.courseCode})?\n\nThis will fail if the course has active slots.",
+            onConfirm = {
+                deleteTarget = null
+                vm.deleteCourse(course.id) { ok, msg -> isError = !ok; feedbackMsg = msg }
+            },
+            onDismiss = { deleteTarget = null }
+        )
+    }
+    //=======================
 
     if (showDialog) {
-        oop.project.unislotandroid.ui.screens.CourseDialog(
+        CourseDialog(
+            // edit- update and delete
+            existing  = editTarget,
+            //=======================
             onDismiss = { showDialog = false },
             onSave = { name, code, credits, desc ->
-                vm.createCourse(name, code, credits, desc) { ok, msg ->
-                    isError = !ok; feedbackMsg = msg
+                // edit- update and delete
+                if (editTarget != null) { // edit: update if editing
+                    vm.updateCourse(editTarget!!.id, name, code, credits, desc) { ok, msg ->
+                        isError = !ok; feedbackMsg = msg
+                    }
+                } else {
+                    vm.createCourse(name, code, credits, desc) { ok, msg -> isError = !ok; feedbackMsg = msg }
                 }
-                showDialog = false
+                showDialog = false; editTarget = null
+                //=========================
             }
         )
     }
 }
 
 @Composable
-private fun CourseDialog(onDismiss: () -> Unit, onSave: (String, String, Int, String?) -> Unit) {
+private fun CourseDialog(
+    // edit- update and delete
+    existing: CourseResponse? = null,
+    //=========================
+    onDismiss: () -> Unit,
+    onSave: (String, String, Int, String?) -> Unit
+) {
     /**
      * by keyword
      *
@@ -326,14 +407,15 @@ private fun CourseDialog(onDismiss: () -> Unit, onSave: (String, String, Int, St
      *
      * Now you can use it like a normal variable
      */
-    var name    by remember { mutableStateOf("") }
-    var code    by remember { mutableStateOf("") }
-    var credits by remember { mutableStateOf("3") } //Initial value = "3"
-    var desc    by remember { mutableStateOf("") }
+    // edit: pre-fill fields from existing course, or blank for new
+    var name    by remember { mutableStateOf(existing?.name ?: "") }
+    var code    by remember { mutableStateOf(existing?.courseCode ?: "") }
+    var credits by remember { mutableStateOf(existing?.creditHours?.toString() ?: "3") }
+    var desc    by remember { mutableStateOf(existing?.description ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Course") },
+        title = { Text(if (existing != null) "Edit Course" else "New Course") }, // edit: dynamic title
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it },
@@ -350,8 +432,7 @@ private fun CourseDialog(onDismiss: () -> Unit, onSave: (String, String, Int, St
             Button(onClick = {
                 val cr = credits.toIntOrNull() ?: 3 //“Convert credits(String) to integer safely; if it fails, use 3 as default”
                 if (name.isNotBlank() && code.isNotBlank()) onSave(name.trim(), code.trim(), cr, desc.ifBlank { null }/*Converts empty input → null*/)
-            }) { Text("Create") }
-        },
+            }) { Text(if (existing != null) "Save Changes" else "Create") } }, // edit: dynamic button label
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
@@ -367,6 +448,8 @@ fun AdminProfessorsScreen(vm: MainViewModel) {
     var showDialog  by remember { mutableStateOf(false) }
     var feedbackMsg by remember { mutableStateOf("") }
     var isError     by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<ProfessorResponse?>(null) }
+    var editTarget   by remember { mutableStateOf<ProfessorResponse?>(null) } // edit: track professor being edited
 
     Column(Modifier.fillMaxSize()) {
         if (feedbackMsg.isNotBlank()) {
@@ -376,31 +459,68 @@ fun AdminProfessorsScreen(vm: MainViewModel) {
             is UiState.Loading -> LoadingScreen()
             is UiState.Success -> {
                 val items = (state as UiState.Success).data
-                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    item {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text("${items.size} Professor(s)", fontWeight = FontWeight.SemiBold)
-                            FloatingActionButton(onClick = { showDialog = true },
-                                modifier = Modifier.size(40.dp), containerColor = MaterialTheme.colorScheme.primary) {
-                                Icon(Icons.Default.Add, null, tint = Color.White)
+                if (items.isEmpty()) {
+                    EmptyState("No professors yet. Tap + to add one.")
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${items.size} Professor(s)", fontWeight = FontWeight.SemiBold)
+                                FloatingActionButton(onClick = { editTarget = null; showDialog = true }, // edit: clear editTarget when creating
+                                    modifier = Modifier.size(40.dp),
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Icon(Icons.Default.Add, null, tint = Color.White)
+                                }
                             }
                         }
-                    }
-                    items(items) { prof ->
-                        Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
-                            Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(prof.name, fontWeight = FontWeight.Medium)
-                                    Text(prof.email, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    if (prof.departmentName != null)
-                                        Text(prof.departmentName, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        items(items) { prof ->
+                            Card(
+                                Modifier.fillMaxWidth(),
+                                elevation = CardDefaults.cardElevation(1.dp)
+                            ) {
+                                Row(
+                                    Modifier.padding(14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(prof.name, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            prof.email,
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (prof.departmentName != null)
+                                            Text(prof.departmentName, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (prof.qualification != null)
+                                            Text(prof.qualification, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    StatusBadge(
+                                        "${
+                                            String.format(
+                                                "%.0f",
+                                                prof.fillRatePercent
+                                            )
+                                        }%", //Convert a decimal number into a rounded percentage string.
+                                        if (prof.fillRatePercent >= 80) "PAID" else "PARTIAL"
+                                    )
+                                    // edit: edit icon button added
+                                    IconButton(onClick = { editTarget = prof; showDialog = true }) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit Professor",
+                                            tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { deleteTarget = prof }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete Professor", tint = RedBadge)
+                                    }
                                 }
-                                StatusBadge(
-                                    "${String.format("%.0f", prof.fillRatePercent)}%", //Convert a decimal number into a rounded percentage string.
-                                    if (prof.fillRatePercent >= 80) "PAID" else "PARTIAL"
-                                )
                             }
                         }
                     }
@@ -408,18 +528,37 @@ fun AdminProfessorsScreen(vm: MainViewModel) {
             }
             else -> {}
         }
+
+        deleteTarget?.let { prof ->
+            ConfirmDeleteDialog(
+                title = "Delete Professor",
+                message = "Delete \"${prof.name}\"?\n\nThis will fail if they have slots with enrolled students.",
+                onConfirm = {
+                    deleteTarget = null
+                    vm.deleteProfessor(prof.id) { ok, msg -> isError = !ok; feedbackMsg = msg }
+                },
+                onDismiss = { deleteTarget = null }
+            )
+        }
     }
 
     if (showDialog) {
         val deptList = (depts as? UiState.Success)?.data ?: emptyList()
-        oop.project.unislotandroid.ui.screens.ProfessorDialog(
+        ProfessorDialog(
+            existing = editTarget, // edit: pass existing professor for pre-fill
             departments = deptList,
-            onDismiss = { showDialog = false },
-            onSave = { name, email, qual, deptId ->
-                vm.createProfessor(name, email, qual, deptId) { ok, msg ->
-                    isError = !ok; feedbackMsg = msg
+            onDismiss = { showDialog = false; editTarget = null },
+            onSave = { name, email, qual, selDept ->
+                if (editTarget != null) { // edit: update if editing
+                    vm.updateProfessor(editTarget!!.id, name, email, qual, selDept) { ok, msg ->
+                        isError = !ok; feedbackMsg = msg
+                    }
+                } else {
+                    vm.createProfessor(name, email, qual, selDept) { ok, msg ->
+                        isError = !ok; feedbackMsg = msg
+                    }
                 }
-                showDialog = false
+                showDialog = false; editTarget = null
             }
         )
     }
@@ -428,6 +567,7 @@ fun AdminProfessorsScreen(vm: MainViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfessorDialog(
+    existing: ProfessorResponse? = null, // edit: nullable existing professor for edit mode
     departments: List<oop.project.unislotandroid.data.model.DepartmentResponse>,
     onDismiss: () -> Unit,
     onSave: (String, String, String?, Long?) -> Unit
@@ -436,69 +576,48 @@ private fun ProfessorDialog(
     var name    by remember { mutableStateOf("") }
     var email   by remember { mutableStateOf("") }
     var qual    by remember { mutableStateOf("") }
-    var deptId  by remember { mutableStateOf<Long?>(null) }
+    var selDept  by remember { mutableStateOf(departments.find { it.id.toLong() == existing?.departmentId }) }
     var expanded by remember { mutableStateOf(false) } // controls dropdown visibility
-    // Derived value: finds the department object based on selected deptId
+    // Derived value: finds the department object based on selected selDept
     // Recomputed on every recomposition (not stored state)
-    val selectedDept = departments.find { it.id == deptId }
 
     AlertDialog(
         onDismissRequest = onDismiss,// Called when user taps outside or presses back → closes dialog
-        title = { Text("New Professor") },
-        text = {
+        title = { Text(if (existing != null) "Edit Professor" else "Register Professor") }, // edit: dynamic title
+        text  = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it },
-                    label = { Text("Full Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = email, onValueChange = { email = it },
-                    label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = qual, onValueChange = { qual = it },
-                    label = { Text("Qualification (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = name,  onValueChange = { name  = it }, label = { Text("Full Name") },  singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") },     singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = qual,  onValueChange = { qual  = it }, label = { Text("Qualification (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 //Simple mental structure
                 //ExposedDropdownMenuBox
                 //    ├── OutlinedTextField (anchor / clickable field)
                 //    └── ExposedDropdownMenu (dropdown list)
                 //            ├── DropdownMenuItem
                 //            └── DropdownMenuItem (loop)
-                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded/*(// toggles dropdown open/close when field is clicked)*/ = it }) {
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
                     // Anchor field (looks like input but acts like dropdown)
                     OutlinedTextField(
-                        value = selectedDept?.name
-                            ?: "Select department (optional)",
+                        value = selDept?.name ?: "Select department (optional)",
                         // Shows selected department name OR placeholder
-
                         onValueChange = {}, // no typing allowed
-                        readOnly = true,    // prevents keyboard
-
+                        readOnly = true, // prevents keyboard
                         label = { Text("Department") },
-
                         // Dropdown arrow icon (rotates automatically)
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded)
-                        },
-
-                        modifier = Modifier
-                            .menuAnchor()   // attaches menu to this field
-                            .fillMaxWidth()
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
                     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(text = { Text("None") }, onClick = { deptId = null; expanded = false })
+                        DropdownMenuItem(text = { Text("None") }, onClick = { selDept = null; expanded = false })
                         departments.forEach { d ->
-                            DropdownMenuItem(
-                                text    = { Text(d.name) },
-                                onClick = { deptId = d.id; expanded = false }
-                            )
+                            DropdownMenuItem(text = { Text(d.name) }, onClick = { selDept = d; expanded = false })
                         }
                     }
                 }
             }
         },
-        confirmButton = {
-            Button(onClick = {
-                if (name.isNotBlank() && email.isNotBlank())
-                    onSave(name.trim(), email.trim(), qual.ifBlank { null }, deptId)
-            }) { Text("Create") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton  = { Button(onClick = { if (name.isNotBlank() && email.isNotBlank()) onSave(name.trim(), email.trim(), qual.ifBlank { null }, selDept?.id?.toLong()) }) { Text(if (existing != null) "Save Changes" else "Register") } }, // edit: dynamic button label
+        dismissButton  = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 

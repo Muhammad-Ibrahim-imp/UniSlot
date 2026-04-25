@@ -450,7 +450,7 @@ private fun ScheduleEntryCard(
                 // - The dropdown is closed by setting 'dayExpanded' to false
                 ExposedDropdownMenu(expanded = dayExpanded, onDismissRequest = { dayExpanded = false }) {
 
-                    oop.project.unislotandroid.ui.screens.ALL_DAYS.forEach { d ->
+                    ALL_DAYS.forEach { d ->
                         DropdownMenuItem(
                             text = { Text(oop.project.unislotandroid.ui.screens.DAY_SHORT[d] ?: d) }, // shows short day name or fallback full name
                             onClick = {
