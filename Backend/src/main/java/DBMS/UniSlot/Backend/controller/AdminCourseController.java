@@ -2,7 +2,6 @@
 package DBMS.UniSlot.Backend.controller;
 
 
-
 import DBMS.UniSlot.Backend.dto.request.CreateCourseRequest;
 import DBMS.UniSlot.Backend.dto.response.ApiResponse;
 import DBMS.UniSlot.Backend.dto.response.CourseResponse;
@@ -56,5 +55,22 @@ public class AdminCourseController {
             @RequestParam String name) {
         return ResponseEntity.ok(
                 ApiResponse.success("Search results", courseService.searchByName(name)));
+    }
+
+    // edit: added PUT endpoint to update course name, code, credit hours and description
+    @PutMapping("/{id}")
+    @Operation(summary = "Update a course's name, code, credit hours or description")
+    public ResponseEntity<ApiResponse<CourseResponse>> update(
+            @PathVariable Long id,
+            @Valid @RequestBody CreateCourseRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Course updated", courseService.update(id, request)));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a course (only if it has no active slots)")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        courseService.delete(id);
+        return ResponseEntity.ok(ApiResponse.success("Course deleted", null));
     }
 }

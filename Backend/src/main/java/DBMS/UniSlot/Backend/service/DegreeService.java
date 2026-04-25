@@ -1,10 +1,8 @@
 package DBMS.UniSlot.Backend.service;
 
-
-
-import  DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
-import  DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
-import  DBMS.UniSlot.Backend.dto.response.DegreeResponse;
+import DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
+import DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
+import DBMS.UniSlot.Backend.dto.response.DegreeResponse;
 
 import java.util.List;
 
@@ -15,4 +13,7 @@ public interface DegreeService {
     List<DegreeResponse> getByDepartment(Long departmentId);
     void addCourseToDegree(AddCourseToDegreeRequest request);
     void removeCourseFromDegree(Long degreeId, Long courseId);
+    void delete(Long id);
+    // edit: added update method to allow editing degree name, code and duration
+    DegreeResponse update(Long id, CreateDegreeRequest request);
 }

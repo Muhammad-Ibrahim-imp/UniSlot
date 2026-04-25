@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.List;
 
 /**
  * ============================================================
@@ -121,35 +122,55 @@ public class PdfGenerationServiceImpl implements PdfGenerationService {
 
     /** University name banner at the top of the document. */
     private void addHeader(Document doc, Student student) {
-        // Dark-navy header bar with white text
+
+        // Create a table with 1 column that takes 100% width of the page
         Table headerTable = new Table(UnitValue.createPercentArray(new float[]{100}))
                 .useAllAvailableWidth();
 
+        // Create a single cell that will act as the header banner
         Cell titleCell = new Cell()
+
+                // Add main title text
                 .add(new Paragraph("UNIVERSITY LECTURE TIMETABLE")
-                        .setFontSize(20)
-                        .setBold()
-                        .setFontColor(HEADER_FG)
-                        .setTextAlignment(TextAlignment.CENTER))
+                        .setFontSize(20)                    // Large font size
+                        .setBold()                          // Bold text
+                        .setFontColor(HEADER_FG)            // White text color
+                        .setTextAlignment(TextAlignment.CENTER)) // Center align
+
+                // Add subtitle text below the title
                 .add(new Paragraph("Slot Selection System — Semester Schedule")
-                        .setFontSize(11)
-                        .setFontColor(HEADER_FG)
-                        .setTextAlignment(TextAlignment.CENTER))
+                        .setFontSize(11)                    // Smaller font
+                        .setFontColor(HEADER_FG)            // White text
+                        .setTextAlignment(TextAlignment.CENTER)) // Center align
+
+                // Set background color (dark navy)
                 .setBackgroundColor(HEADER_BG)
+
+                // Add inner spacing inside the cell
                 .setPadding(15)
+
+                // Remove border so it looks like a clean banner
                 .setBorder(null);
 
+        // Add the header cell into the table
         headerTable.addCell(titleCell);
+
+        // Add the table (header) to the document
         doc.add(headerTable);
+
+        // Add some vertical spacing after header
         doc.add(new Paragraph("\n"));
     }
 
-    /** Student info section below the header. */
+    /** Student info section below the header */
     private void addStudentInfo(Document doc, Student student) {
-        Table info = new Table(UnitValue.createPercentArray(new float[]{25, 75}))
-                .useAllAvailableWidth()
-                .setMarginBottom(15);
 
+        // Create 2-column table (label 25%, value 75%)
+        Table info = new Table(UnitValue.createPercentArray(new float[]{25, 75}))
+                .useAllAvailableWidth()   // full width
+                .setMarginBottom(15);     // space below table
+
+        // Add rows (label + value)
         addInfoRow(info, "Student Name",  student.getName());
         addInfoRow(info, "Roll Number",   student.getRollNumber());
         addInfoRow(info, "Department",    student.getDepartment().getName());
@@ -157,19 +178,24 @@ public class PdfGenerationServiceImpl implements PdfGenerationService {
         addInfoRow(info, "Semester",      String.valueOf(student.getCurrentSemester()));
         addInfoRow(info, "Generated On",  LocalDate.now().toString());
 
+        // Add table to document
         doc.add(info);
     }
 
     private void addInfoRow(Table table, String label, String value) {
+
+        // Add label cell (left column)
         table.addCell(new Cell()
-                .add(new Paragraph(label).setBold().setFontSize(10))
-                .setBackgroundColor(ROW_EVEN)
-                .setPadding(5)
-                .setBorderRight(null));
+                .add(new Paragraph(label).setBold().setFontSize(10)) // label text
+                .setBackgroundColor(ROW_EVEN) // light background
+                .setPadding(5) // inner spacing
+                .setBorderRight(null)); // remove right border
+
+        // Add value cell (right column)
         table.addCell(new Cell()
-                .add(new Paragraph(value != null ? value : "—").setFontSize(10))
-                .setPadding(5)
-                .setBorderLeft(null));
+                .add(new Paragraph(value != null ? value : "—").setFontSize(10)) // value or fallback
+                .setPadding(5) // inner spacing
+                .setBorderLeft(null)); // remove left border
     }
 
     /**
@@ -204,22 +230,27 @@ public class PdfGenerationServiceImpl implements PdfGenerationService {
             }
         }
 
+        // Flatten all (slot, lecture) pairs into time windows
         SortedSet<TimeWindow> timeWindows = new TreeSet<>();
         for (LectureSlot ls : slots) {
-            timeWindows.add(new TimeWindow(ls.getStartTime(), ls.getEndTime()));
+            for (DBMS.UniSlot.Backend.entity.SlotLecture lec : ls.getLectures()) {
+                timeWindows.add(new TimeWindow(lec.getStartTime(), lec.getEndTime()));
+            }
         }
 
-        // Build lookup: (day, startTime) -> LectureSlot for quick cell fill
-        Map<String, LectureSlot> slotMap = new HashMap<>();
+        // Build lookup: (day, startTime) -> (LectureSlot, SlotLecture)
+        record SlotLecturePair(LectureSlot slot, DBMS.UniSlot.Backend.entity.SlotLecture lec) {}
+        Map<String, SlotLecturePair> slotMap = new HashMap<>();
         for (LectureSlot ls : slots) {
-            String key = ls.getDayOfWeek().name() + "|" + ls.getStartTime();
-            slotMap.put(key, ls);
+            for (DBMS.UniSlot.Backend.entity.SlotLecture lec : ls.getLectures()) {
+                String key = lec.getDayOfWeek().name() + "|" + lec.getStartTime();
+                slotMap.put(key, new SlotLecturePair(ls, lec));
+            }
         }
 
         // ── Data rows ────────────────────────────────────────────────────
         int rowIndex = 0;
         for (TimeWindow tw : timeWindows) {
-            // Time column
             String timeLabel = tw.start().format(TIME_FMT) +
                     "\n" + tw.end().format(TIME_FMT);
             DeviceRgb rowBg = (rowIndex % 2 == 0) ? ROW_EVEN : ROW_ODD;
@@ -231,17 +262,17 @@ public class PdfGenerationServiceImpl implements PdfGenerationService {
                     .setTextAlignment(TextAlignment.CENTER);
             grid.addCell(timeCell);
 
-            // Day columns
             for (LectureDay day : ORDERED_DAYS) {
                 String key = day.name() + "|" + tw.start();
-                LectureSlot ls = slotMap.get(key);
+                SlotLecturePair pair = slotMap.get(key);
 
-                if (ls != null) {
-                    // Slot found for this day+time → green cell with course + prof info
-                    String cellText = ls.getCourse().getCourseCode() +
-                            "\n" + ls.getCourse().getName() +
+                if (pair != null) {
+                    LectureSlot ls  = pair.slot();
+                    DBMS.UniSlot.Backend.entity.SlotLecture lec = pair.lec();
+                    String cellText = ls.getSlotName() +
+                            "\n" + ls.getCourse().getCourseCode() +
                             "\n" + ls.getProfessor().getName() +
-                            (ls.getVenue() != null ? "\n[" + ls.getVenue() + "]" : "");
+                            (lec.getVenue() != null ? "\n[" + lec.getVenue() + "]" : "");
                     grid.addCell(new Cell()
                             .add(new Paragraph(cellText)
                                     .setFontSize(7.5f)
@@ -249,7 +280,6 @@ public class PdfGenerationServiceImpl implements PdfGenerationService {
                             .setBackgroundColor(SLOT_COLOR)
                             .setPadding(4));
                 } else {
-                    // Empty cell for this day+time
                     grid.addCell(new Cell()
                             .add(new Paragraph("—")
                                     .setFontSize(8)
@@ -264,15 +294,9 @@ public class PdfGenerationServiceImpl implements PdfGenerationService {
 
         doc.add(grid);
 
-        // ── Credit hour summary below the grid ───────────────────────────
+        // ── Credit hour summary ──────────────────────────────────────────
         int totalCredits = slots.stream()
-                .map(ls -> ls.getSlotGroupCode())
-                .distinct()
-                .mapToInt(code -> slots.stream()
-                        .filter(ls -> ls.getSlotGroupCode().equals(code))
-                        .findFirst()
-                        .map(ls -> ls.getCourse().getCreditHours())
-                        .orElse(0))
+                .mapToInt(ls -> ls.getCourse().getCreditHours())
                 .sum();
 
         doc.add(new Paragraph("\nTotal Credit Hours Selected: " + totalCredits)

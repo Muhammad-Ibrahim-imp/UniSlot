@@ -1,7 +1,6 @@
 package DBMS.UniSlot.Backend.controller;
 
 
-
 import DBMS.UniSlot.Backend.dto.request.CreateLectureSlotRequest;
 import DBMS.UniSlot.Backend.dto.response.ApiResponse;
 import DBMS.UniSlot.Backend.dto.response.LectureSlotResponse;
@@ -22,20 +21,35 @@ import java.util.List;
 @RequestMapping("/api/admin/slots")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin — Lecture Slots", description = "Create and manage lecture slot offerings")
+@Tag(name = "Admin — Lecture Slots",
+        description = "Create and manage course slots (each slot has its own lecture schedule)")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminLectureSlotController {
 
     private final LectureSlotService lectureSlotService;
 
+    /**
+     * Create one complete slot for a course.
+     *
+     * A slot = one section students can enrol into (e.g., "OOP Slot 1").
+     * The request body includes the full weekly schedule:
+     *   schedule: [
+     *     { dayOfWeek: "MONDAY",    startTime: "10:00", endTime: "13:00", venue: "Room 101" },
+     *     { dayOfWeek: "WEDNESDAY", startTime: "14:00", endTime: "16:00", venue: "Lab 3"   }
+     *   ]
+     *
+     * Multiple calls to this endpoint create multiple independent slots
+     * (e.g., Slot 1, Slot 2, …) that students can choose between.
+     */
     @PostMapping
-    @Operation(summary = "Create a new lecture slot group (one DB row per day specified)")
-    public ResponseEntity<ApiResponse<List<LectureSlotResponse>>> create(
+    @Operation(summary = "Create a lecture slot with its full weekly schedule")
+    public ResponseEntity<ApiResponse<LectureSlotResponse>> create(
             @Valid @RequestBody CreateLectureSlotRequest request) {
-        List<LectureSlotResponse> slots = lectureSlotService.createSlotGroup(request);
+        LectureSlotResponse slot = lectureSlotService.createSlot(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
-                        "Slot group created with " + slots.size() + " day entries", slots));
+                        "Slot '" + slot.getSlotName() + "' created with " +
+                                slot.getLectures().size() + " lecture(s)", slot));
     }
 
     @GetMapping("/by-course/{courseId}")
@@ -57,10 +71,10 @@ public class AdminLectureSlotController {
     }
 
     @DeleteMapping("/group/{slotGroupCode}")
-    @Operation(summary = "Delete a slot group (only if no students are enrolled)")
+    @Operation(summary = "Delete a slot (only if no students are enrolled)")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable String slotGroupCode) {
-        lectureSlotService.deleteSlotGroup(slotGroupCode);
-        return ResponseEntity.ok(ApiResponse.success("Slot group deleted", null));
+        lectureSlotService.deleteSlot(slotGroupCode);
+        return ResponseEntity.ok(ApiResponse.success("Slot deleted", null));
     }
 }

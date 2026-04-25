@@ -1,6 +1,5 @@
 package DBMS.UniSlot.Backend.controller;
 
-
 import DBMS.UniSlot.Backend.dto.request.CreateProfessorRequest;
 import DBMS.UniSlot.Backend.dto.response.ApiResponse;
 import DBMS.UniSlot.Backend.dto.response.ProfessorResponse;
@@ -64,5 +63,22 @@ public class AdminProfessorController {
         return ResponseEntity.ok(
                 ApiResponse.success("Evaluation ranking",
                         professorService.getEvaluationRanking()));
+    }
+
+    // edit: added PUT endpoint to update professor name, email, qualification and department
+    @PutMapping("/{id}")
+    @Operation(summary = "Update a professor's name, email, qualification or department")
+    public ResponseEntity<ApiResponse<ProfessorResponse>> update(
+            @PathVariable Long id,
+            @Valid @RequestBody CreateProfessorRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Professor updated", professorService.update(id, request)));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a professor (only if no students enrolled in their slots)")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        professorService.delete(id);
+        return ResponseEntity.ok(ApiResponse.success("Professor deleted", null));
     }
 }

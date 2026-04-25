@@ -3,6 +3,7 @@ package DBMS.UniSlot.Backend.service.Impl;
 
 import  DBMS.UniSlot.Backend.dto.request.SelectSlotRequest;
 import  DBMS.UniSlot.Backend.dto.response.EnrollmentResponse;
+import DBMS.UniSlot.Backend.dto.response.SlotLectureResponse;
 import  DBMS.UniSlot.Backend.entity.*;
 import  DBMS.UniSlot.Backend.exception.BusinessRuleException;
 import  DBMS.UniSlot.Backend.exception.ResourceNotFoundException;
@@ -17,158 +18,129 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * ============================================================
- * SlotEnrollmentServiceImpl — Core Business Logic
- * ============================================================
- * This is the HEART of the application. The selectSlot() method
- * enforces all business rules:
+ * Core enrollment logic — enforces all business rules:
  *
- *  Rule 1 — Fee Gate:     Student must have PAID fee status.
- *  Rule 2 — Capacity:     Slot must have available seats.
- *  Rule 3 — No Duplicate: Student cannot pick 2 slots for same course.
- *  Rule 4 — No Time Clash: New slot must not overlap existing timetable.
+ *  Rule 1 — Fee Gate:      Student must have PAID fee status.
+ *  Rule 2 — Capacity:      Slot must have available seats.
+ *  Rule 3 — No Duplicate:  Cannot pick 2 slots for the same course.
+ *  Rule 4 — No Time Clash: New slot lectures must not overlap existing ones.
  *
- * @Transactional on selectSlot() is critical:
- *   If two students try to grab the last seat simultaneously,
- *   the DB-level transaction isolation (READ_COMMITTED by default
- *   on PostgreSQL) + the enrolledCount increment + flush ensures
- *   only one succeeds. For truly high-traffic systems, consider
- *   a pessimistic lock (@Lock(PESSIMISTIC_WRITE)) on the LectureSlot.
- * ============================================================
+ * With the redesigned model a student's enrollment creates exactly
+ * ONE SlotEnrollment row (not one per day).  The weekly timetable
+ * is built by reading enrollment.lectureSlot.lectures.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class SlotEnrollmentServiceImpl implements SlotEnrollmentService {
 
-    private final StudentRepository             studentRepository;
-    private final LectureSlotRepository         lectureSlotRepository;
-    private final StudentSlotEnrollmentRepository enrollmentRepository;
-    private final ProfessorRepository           professorRepository;
+    private final StudentRepository        studentRepository;
+    private final LectureSlotRepository    lectureSlotRepository;
+    private final SlotEnrollmentRepository enrollmentRepository;
+    private final ProfessorRepository      professorRepository;
 
     @Override
     @Transactional
-    public List<EnrollmentResponse> selectSlot(Long studentId, SelectSlotRequest request) {
+    public List<EnrollmentResponse> selectSlot(Long studentId,
+                                               SelectSlotRequest request) {
         Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student", "id", studentId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Student", "id", studentId));
 
-        // ── Rule 1: Fee Gate ──────────────────────────────────────────────
+        // Rule 1 — Fee Gate
         if (!student.hasEligibleFeeStatus()) {
             throw new BusinessRuleException(
-                    "You cannot select slots until your semester fee is paid. " +
-                            "Please contact the finance office.");
+                    "Your semester fee is unpaid. " +
+                            "Please contact the finance office to enable slot selection.");
         }
 
-        // Fetch all slots in the requested group (one per day)
-        List<LectureSlot> slotGroup = lectureSlotRepository
-                .findBySlotGroupCode(request.getSlotGroupCode());
+        LectureSlot slot = lectureSlotRepository
+                .findBySlotGroupCode(request.getSlotGroupCode())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "LectureSlot", "slotGroupCode", request.getSlotGroupCode()));
 
-        if (slotGroup.isEmpty()) {
-            throw new ResourceNotFoundException(
-                    "LectureSlot group", "slotGroupCode", request.getSlotGroupCode());
-        }
-
-        // ── Rule 3: No Duplicate Course ──────────────────────────────────
-        // All slots in a group belong to the same course, so check using the first slot
-        Long courseId = slotGroup.get(0).getCourse().getId();
-        if (enrollmentRepository.existsByStudentAndCourse(studentId, courseId)) {
+        // Rule 2 — Capacity
+        if (!slot.hasAvailableSeats()) {
             throw new BusinessRuleException(
-                    "You have already selected a slot for course '" +
-                            slotGroup.get(0).getCourse().getCourseCode() +
-                            "'. Drop the existing slot first if you want to switch.");
+                    "Slot '" + slot.getSlotName() + "' is full (" +
+                            slot.getMaxCapacity() + "/" + slot.getMaxCapacity() + " seats taken).");
         }
 
-        // ── Rule 2: Capacity Check (use first slot — all share same capacity) ─
-        LectureSlot representative = slotGroup.get(0);
-        if (!representative.hasAvailableSeats()) {
+        // Rule 3 — No duplicate course
+        if (enrollmentRepository.existsByStudentAndCourse(studentId,
+                slot.getCourse().getId())) {
             throw new BusinessRuleException(
-                    "Slot '" + request.getSlotGroupCode() + "' is full (" +
-                            representative.getMaxCapacity() + "/" +
-                            representative.getMaxCapacity() + " seats taken).");
+                    "You have already enrolled in a slot for '" +
+                            slot.getCourse().getCourseCode() +
+                            "'. Drop your existing slot first if you want to switch.");
         }
 
-        // ── Rule 4: Time Conflict Check ───────────────────────────────────
-        // Get the student's current timetable slots
+        // Rule 4 — Time conflict detection
+        // Collect all lecture slots the student is already enrolled in
         List<LectureSlot> currentSlots =
                 lectureSlotRepository.findSlotsByStudentEnrollment(studentId);
 
-        for (LectureSlot newSlot : slotGroup) {
-            for (LectureSlot existing : currentSlots) {
-                if (existing.getDayOfWeek() == newSlot.getDayOfWeek()
-                        && timesOverlap(newSlot, existing)) {
-                    throw new BusinessRuleException(
-                            "Time conflict: the selected slot on " + newSlot.getDayOfWeek() +
-                                    " (" + newSlot.getStartTime() + "–" + newSlot.getEndTime() + ")" +
-                                    " overlaps with your existing slot for '" +
-                                    existing.getCourse().getCourseCode() + "'.");
+        for (SlotLecture newLec : slot.getLectures()) {
+            for (LectureSlot existingSlot : currentSlots) {
+                for (SlotLecture existingLec : existingSlot.getLectures()) {
+                    if (existingLec.getDayOfWeek() == newLec.getDayOfWeek()
+                            && timesOverlap(newLec, existingLec)) {
+                        throw new BusinessRuleException(
+                                "Time conflict on " + newLec.getDayOfWeek() +
+                                        " (" + newLec.getStartTime() + "–" + newLec.getEndTime() + ")" +
+                                        " overlaps with your existing slot for '" +
+                                        existingSlot.getCourse().getCourseCode() + "'.");
+                    }
                 }
             }
         }
 
-        // ── All rules passed — enroll the student ────────────────────────
-        // Update each slot's enrollment count
-        for (LectureSlot slot : slotGroup) {
-            slot.incrementEnrollment();
-            lectureSlotRepository.save(slot);
-        }
+        // All rules passed — create ONE enrollment record
+        slot.incrementEnrollment();
+        lectureSlotRepository.save(slot);
 
-        // Update professor's total seats filled metric (once per group, not per day-row)
-        Professor professor = slotGroup.get(0).getProfessor();
+        SlotEnrollment enrollment = SlotEnrollment.builder()
+                .student(student)
+                .lectureSlot(slot)
+                .slotGroupCode(slot.getSlotGroupCode())
+                .enrolledAt(LocalDateTime.now())
+                .dropped(false)
+                .build();
+        enrollmentRepository.save(enrollment);
+
+        // Professor analytics
+        Professor professor = slot.getProfessor();
         professor.setTotalSeatsFilled(professor.getTotalSeatsFilled() + 1);
         professorRepository.save(professor);
 
-        // Create one enrollment record per slot-day
-        List<StudentSlotEnrollment> enrollments = slotGroup.stream()
-                .map(slot -> StudentSlotEnrollment.builder()
-                        .student(student)
-                        .lectureSlot(slot)
-                        .slotGroupCode(request.getSlotGroupCode())
-                        .enrolledAt(LocalDateTime.now())
-                        .dropped(false)
-                        .build())
-                .map(enrollmentRepository::save)
-                .toList();
+        log.info("Student {} enrolled in slot '{}' ({})",
+                student.getRollNumber(), slot.getSlotName(), slot.getSlotGroupCode());
 
-        log.info("Student {} enrolled in slot group {} ({} days)",
-                student.getRollNumber(), request.getSlotGroupCode(), slotGroup.size());
-
-        return enrollments.stream().map(this::toResponse).toList();
+        return List.of(toResponse(enrollment));
     }
 
     @Override
     @Transactional
     public void dropSlot(Long studentId, String slotGroupCode) {
-        // Find all enrollment rows for this student + group
-        List<StudentSlotEnrollment> enrollments =
-                enrollmentRepository.findActiveEnrollmentsByStudent(studentId)
-                        .stream()
-                        .filter(e -> e.getSlotGroupCode().equals(slotGroupCode))
-                        .toList();
+        SlotEnrollment enrollment = enrollmentRepository
+                .findByStudentIdAndSlotGroupCodeAndDroppedFalse(studentId, slotGroupCode)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Enrollment", "slotGroupCode", slotGroupCode));
 
-        if (enrollments.isEmpty()) {
-            throw new ResourceNotFoundException(
-                    "Active enrollment", "slotGroupCode", slotGroupCode);
-        }
+        enrollment.setDropped(true);
+        enrollment.setDroppedAt(LocalDateTime.now());
+        enrollmentRepository.save(enrollment);
 
-        for (StudentSlotEnrollment enrollment : enrollments) {
-            // Soft-delete the enrollment
-            enrollment.setDropped(true);
-            enrollment.setDroppedAt(LocalDateTime.now());
-            enrollmentRepository.save(enrollment);
+        LectureSlot slot = enrollment.getLectureSlot();
+        slot.decrementEnrollment();
+        lectureSlotRepository.save(slot);
 
-            // Decrement the slot's enrollment count
-            LectureSlot slot = enrollment.getLectureSlot();
-            slot.decrementEnrollment();
-            lectureSlotRepository.save(slot);
-        }
-
-        // Decrement professor fill count
-        Professor professor = enrollments.get(0).getLectureSlot().getProfessor();
+        Professor professor = slot.getProfessor();
         professor.setTotalSeatsFilled(
                 Math.max(0, professor.getTotalSeatsFilled() - 1));
         professorRepository.save(professor);
 
-        log.info("Student {} dropped slot group {}", studentId, slotGroupCode);
+        log.info("Student {} dropped slot '{}'", studentId, slotGroupCode);
     }
 
     @Override
@@ -178,32 +150,38 @@ public class SlotEnrollmentServiceImpl implements SlotEnrollmentService {
                 .stream().map(this::toResponse).toList();
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────
+    // ── Private helpers ───────────────────────────────────────────────────────
 
-    /**
-     * Checks whether two lecture slots have overlapping time ranges on the same day.
-     * Overlap exists when: a.start < b.end AND a.end > b.start
-     */
-    private boolean timesOverlap(LectureSlot a, LectureSlot b) {
+    private boolean timesOverlap(SlotLecture a, SlotLecture b) {
         return a.getStartTime().isBefore(b.getEndTime())
                 && a.getEndTime().isAfter(b.getStartTime());
     }
 
-    private EnrollmentResponse toResponse(StudentSlotEnrollment e) {
-        LectureSlot ls = e.getLectureSlot();
+    private EnrollmentResponse toResponse(SlotEnrollment e) {
+        LectureSlot slot = e.getLectureSlot();
+        List<SlotLectureResponse> lectures = slot.getLectures().stream()
+                .map(l -> SlotLectureResponse.builder()
+                        .id(l.getId())
+                        .dayOfWeek(l.getDayOfWeek())
+                        .startTime(l.getStartTime())
+                        .endTime(l.getEndTime())
+                        .venue(l.getVenue())
+                        .build())
+                .sorted((a, b) -> a.getDayOfWeek().compareTo(b.getDayOfWeek()))
+                .toList();
+
         return EnrollmentResponse.builder()
                 .enrollmentId(e.getId())
                 .slotGroupCode(e.getSlotGroupCode())
-                .courseName(ls.getCourse().getName())
-                .courseCode(ls.getCourse().getCourseCode())
-                .creditHours(ls.getCourse().getCreditHours())
-                .professorName(ls.getProfessor().getName())
-                .dayOfWeek(ls.getDayOfWeek())
-                .startTime(ls.getStartTime())
-                .endTime(ls.getEndTime())
-                .venue(ls.getVenue())
+                .slotName(slot.getSlotName())
+                .courseName(slot.getCourse().getName())
+                .courseCode(slot.getCourse().getCourseCode())
+                .creditHours(slot.getCourse().getCreditHours())
+                .professorName(slot.getProfessor().getName())
+                .lectures(lectures)
                 .enrolledAt(e.getEnrolledAt())
                 .dropped(e.isDropped())
                 .build();
     }
 }
+

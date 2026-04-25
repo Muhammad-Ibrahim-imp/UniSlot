@@ -158,7 +158,7 @@ public class StudentController {
      */
     private Student resolveStudent(User user) {
         return studentRepository.findByUserEmail(user.getEmail())
-                .orElseThrow(() -> new com.university.slotselector.exception
+                .orElseThrow(() -> new DBMS.UniSlot.Backend.exception
                         .ResourceNotFoundException("Student", "email", user.getEmail()));
     }
 }

@@ -1,7 +1,5 @@
 package DBMS.UniSlot.Backend.controller;
 
-
-
 import DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
 import DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
 import DBMS.UniSlot.Backend.dto.response.ApiResponse;
@@ -61,6 +59,24 @@ public class AdminDegreeController {
         return ResponseEntity.ok(
                 ApiResponse.success("Course added to degree at semester " +
                         request.getSemesterNumber(), null));
+    }
+
+
+    // edit: added PUT endpoint to update degree name, code and duration years
+    @PutMapping("/{id}")
+    @Operation(summary = "Update a degree's name, code or duration")
+    public ResponseEntity<ApiResponse<DegreeResponse>> update(
+            @PathVariable Long id,
+            @Valid @RequestBody CreateDegreeRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Degree updated", degreeService.update(id, request)));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a degree (only if no students are enrolled in it)")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        degreeService.delete(id);
+        return ResponseEntity.ok(ApiResponse.success("Degree deleted", null));
     }
 
     @DeleteMapping("/{degreeId}/courses/{courseId}")

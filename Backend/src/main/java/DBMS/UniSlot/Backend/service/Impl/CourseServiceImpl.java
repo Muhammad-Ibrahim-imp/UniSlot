@@ -1,7 +1,5 @@
 package DBMS.UniSlot.Backend.service.Impl;
 
-
-
 import DBMS.UniSlot.Backend.dto.request.CreateCourseRequest;
 import DBMS.UniSlot.Backend.dto.response.CourseResponse;
 import DBMS.UniSlot.Backend.entity.Course;
@@ -96,10 +94,9 @@ public class CourseServiceImpl implements CourseService {
                 .map(m -> m.getDegree().getCode() + " (Sem " + m.getSemesterNumber() + ")")
                 .toList();
 
-        // Count distinct slot groups by unique group codes
+        // Count slots that still have available capacity
         long slotGroupCount = c.getLectureSlots().stream()
-                .map(ls -> ls.getSlotGroupCode())
-                .distinct()
+                .filter(ls -> ls.hasAvailableSeats())
                 .count();
 
         return CourseResponse.builder()
@@ -112,5 +109,42 @@ public class CourseServiceImpl implements CourseService {
                 .offeredInDegrees(degrees)
                 .build();
     }
-}
 
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        Course course = courseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", id));
+        if (!course.getLectureSlots().isEmpty()) {
+            throw new BusinessRuleException(
+                    "Cannot delete course '" + course.getName() + "': it has " +
+                            course.getLectureSlots().size() + " active slot(s). Delete the slots first.");
+        }
+        courseRepository.delete(course);
+        log.info("Course {} ({}) deleted", course.getName(), course.getCourseCode());
+    }
+
+    // edit: new update method — allows admin to change course name, code, credits and description
+    @Override
+    @Transactional
+    public CourseResponse update(Long id, CreateCourseRequest request) {
+        // edit: find existing course or 404
+        Course course = courseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Course", "id", id));
+        // edit: check code uniqueness only if it changed
+        if (!course.getCourseCode().equalsIgnoreCase(request.getCourseCode())) {
+            courseRepository.findByCourseCode(request.getCourseCode()).ifPresent(existing -> {
+                throw new BusinessRuleException(
+                        "Course code '" + request.getCourseCode() + "' is already used by another course.");
+            });
+        }
+        // edit: apply updated values
+        course.setName(request.getName().trim());
+        course.setCourseCode(request.getCourseCode().toUpperCase().trim());
+        course.setCreditHours(request.getCreditHours());
+        course.setDescription(request.getDescription());
+        course = courseRepository.save(course); // edit: persist
+        log.info("Course {} ({}) updated", course.getName(), course.getCourseCode()); // edit: audit
+        return toResponse(course); // edit: return updated DTO
+    }
+}

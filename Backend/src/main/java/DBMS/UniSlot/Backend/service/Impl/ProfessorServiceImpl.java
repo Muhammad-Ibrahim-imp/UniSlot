@@ -1,7 +1,6 @@
 package DBMS.UniSlot.Backend.service.Impl;
 
 
-
 import DBMS.UniSlot.Backend.dto.request.CreateProfessorRequest;
 import DBMS.UniSlot.Backend.dto.response.ProfessorResponse;
 import DBMS.UniSlot.Backend.entity.Department;
@@ -103,5 +102,52 @@ public class ProfessorServiceImpl implements ProfessorService {
                 .fillRatePercent(p.getFillRatePercent())
                 .build();
     }
-}
 
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        Professor professor = professorRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Professor", "id", id));
+        boolean hasActiveSlots = !professor.getLectureSlots().isEmpty() &&
+                professor.getLectureSlots().stream().anyMatch(s -> s.getEnrolledCount() > 0);
+        if (hasActiveSlots) {
+            throw new BusinessRuleException(
+                    "Cannot delete professor '" + professor.getName() + "': they have slots with " +
+                            "enrolled students. Drop those enrollments first.");
+        }
+        professorRepository.delete(professor);
+        log.info("Professor {} deleted", professor.getName());
+    }
+
+    // edit: new update method — allows admin to edit professor name, email, qualification and department
+    @Override
+    @Transactional
+    public ProfessorResponse update(Long id, CreateProfessorRequest request) {
+        // edit: find existing professor or 404
+        Professor professor = professorRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Professor", "id", id));
+        // edit: if email changed, ensure it's not taken by another professor
+        if (!professor.getEmail().equalsIgnoreCase(request.getEmail())) {
+            if (professorRepository.existsByEmail(request.getEmail())) {
+                throw new BusinessRuleException(
+                        "Email '" + request.getEmail() + "' is already registered to another professor.");
+            }
+        }
+        // edit: apply updated values
+        professor.setName(request.getName().trim());
+        professor.setEmail(request.getEmail().trim().toLowerCase());
+        professor.setQualification(request.getQualification());
+        // edit: update department (can be set to null to unassign)
+        if (request.getDepartmentId() != null) {
+            Department dept = departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Department", "id", request.getDepartmentId()));
+            professor.setDepartment(dept);
+        } else {
+            professor.setDepartment(null); // edit: allow un-assigning from department
+        }
+        professor = professorRepository.save(professor); // edit: persist
+        log.info("Professor {} updated", professor.getName()); // edit: audit
+        return toResponse(professor); // edit: return updated DTO
+    }
+}

@@ -1,18 +1,15 @@
 package DBMS.UniSlot.Backend.service.Impl;
 
-
-
-
-import  DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
-import  DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
-import  DBMS.UniSlot.Backend.dto.response.CourseResponse;
-import  DBMS.UniSlot.Backend.dto.response.DegreeResponse;
-import  DBMS.UniSlot.Backend.dto.response.SemesterCoursesResponse;
-import  DBMS.UniSlot.Backend.entity.*;
-import  DBMS.UniSlot.Backend.exception.BusinessRuleException;
-import  DBMS.UniSlot.Backend.exception.ResourceNotFoundException;
-import  DBMS.UniSlot.Backend.repository.*;
-import  DBMS.UniSlot.Backend.service.DegreeService;
+import DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
+import DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
+import DBMS.UniSlot.Backend.dto.response.CourseResponse;
+import DBMS.UniSlot.Backend.dto.response.DegreeResponse;
+import DBMS.UniSlot.Backend.dto.response.SemesterCoursesResponse;
+import DBMS.UniSlot.Backend.entity.*;
+import DBMS.UniSlot.Backend.exception.BusinessRuleException;
+import DBMS.UniSlot.Backend.exception.ResourceNotFoundException;
+import DBMS.UniSlot.Backend.repository.*;
+import DBMS.UniSlot.Backend.service.DegreeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,10 +23,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DegreeServiceImpl implements DegreeService {
 
-    private final DegreeRepository             degreeRepository;
-    private final DepartmentRepository         departmentRepository;
-    private final CourseRepository             courseRepository;
+    private final DegreeRepository degreeRepository;
+    private final DepartmentRepository departmentRepository;
+    private final CourseRepository courseRepository;
     private final DegreeCourseMappingRepository dcmRepository;
+    private final StudentRepository studentRepository;
 
     @Override
     @Transactional
@@ -38,10 +36,6 @@ public class DegreeServiceImpl implements DegreeService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Department", "id", request.getDepartmentId()));
 
-        if (dcmRepository.existsByDegreeIdAndCourseIdAndSemesterNumber(
-                request.getDepartmentId(), 0L, 0)) {
-            // just a placeholder — real guard below
-        }
         if (degreeRepository.existsByCodeAndDepartmentId(
                 request.getCode(), request.getDepartmentId())) {
             throw new BusinessRuleException(
@@ -167,4 +161,38 @@ public class DegreeServiceImpl implements DegreeService {
                 .semesters(semesters)
                 .build();
     }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        Degree degree = degreeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Degree", "id", id));
+        // Guard: block delete if students are enrolled in this degree
+        long studentCount = studentRepository.countByDegreeId(id);
+        if (studentCount > 0) {
+            throw new BusinessRuleException(
+                    "Cannot delete degree '" + degree.getName() + "': " +
+                            studentCount + " student(s) are enrolled. Reassign or remove students first.");
+        }
+        degreeRepository.delete(degree);
+        log.info("Degree {} ({}) deleted", degree.getName(), degree.getCode());
+    }
+
+
+    // edit: new update method — allows admin to rename a degree or change its duration
+    @Override
+    @Transactional
+    public DegreeResponse update(Long id, CreateDegreeRequest request) {
+        // edit: look up existing degree or throw 404
+        Degree degree = degreeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Degree", "id", id));
+        // edit: apply new values (department cannot be changed via this endpoint)
+        degree.setName(request.getName().trim());
+        degree.setCode(request.getCode().toUpperCase().trim());
+        degree.setDurationYears(request.getDurationYears());
+        degree = degreeRepository.save(degree); // edit: persist changes
+        log.info("Degree {} ({}) updated", degree.getName(), degree.getCode()); // edit: audit log
+        return toResponse(degree); // edit: return updated DTO
+    }
+
 }

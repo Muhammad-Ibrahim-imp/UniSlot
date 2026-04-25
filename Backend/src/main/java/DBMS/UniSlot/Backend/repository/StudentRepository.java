@@ -75,4 +75,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     /** Count of students by department for admin dashboard. */
     @Query("SELECT s.department.name, COUNT(s) FROM Student s GROUP BY s.department.name")
     List<Object[]> countStudentsByDepartment();
+
+    long countByDegreeId(Long degreeId);
 }

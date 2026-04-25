@@ -1,7 +1,5 @@
 package DBMS.UniSlot.Backend.service;
 
-
-
 import DBMS.UniSlot.Backend.dto.request.CreateCourseRequest;
 import DBMS.UniSlot.Backend.dto.response.CourseResponse;
 
@@ -19,4 +17,7 @@ public interface CourseService {
      */
     List<CourseResponse> getCoursesForStudentSemester(Long degreeId, Integer semester);
     List<CourseResponse> searchByName(String name);
+    void delete(Long id);
+    // edit: added update method to allow editing course name, code, credits and description
+    CourseResponse update(Long id, CreateCourseRequest request);
 }

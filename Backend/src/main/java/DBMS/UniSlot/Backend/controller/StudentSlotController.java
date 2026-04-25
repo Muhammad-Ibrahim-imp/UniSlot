@@ -1,10 +1,8 @@
 package DBMS.UniSlot.Backend.controller;
 
-
-
 import DBMS.UniSlot.Backend.dto.request.SelectSlotRequest;
 import DBMS.UniSlot.Backend.dto.response.ApiResponse;
-import DBMS.UniSlot.Backend.dto.response.CourseSummaryResponse;
+import DBMS.UniSlot.Backend.dto.response.CourseResponse;
 import DBMS.UniSlot.Backend.dto.response.EnrollmentResponse;
 import DBMS.UniSlot.Backend.dto.response.LectureSlotResponse;
 import DBMS.UniSlot.Backend.dto.response.StudentResponse;
@@ -60,23 +58,19 @@ public class StudentSlotController {
     public ResponseEntity<ApiResponse<StudentResponse>> myProfile(
             @AuthenticationPrincipal UserDetails user) {
         return ResponseEntity.ok(ApiResponse.success("Profile loaded",
-                studentService.findByEmail(user.getUsername())));
+                studentService.getByEmail(user.getUsername())));
     }
 
     @GetMapping("/my-courses")
     @Operation(summary = "List courses available for your degree and current semester",
             description = "Includes shared courses from other departments (same course code). " +
                     "Shows available slot count per course.")
-    public ResponseEntity<ApiResponse<List<CourseSummaryResponse>>> myCourses(
+    public ResponseEntity<ApiResponse<List<CourseResponse>>> myCourses(
             @AuthenticationPrincipal UserDetails user) {
-        // Load student to get degree + current semester
-        StudentResponse student = studentService.findByEmail(user.getUsername());
-        // We need the degreeId — fetch it via the internal findByEmail route
-        var courses = courseService.findCoursesForStudent(
-                // Note: We embed degreeId in a second call for clarity.
-                // In production you'd add degreeId to StudentResponse.
-                getDegreeIdFromEmail(user.getUsername()),
-                student.getCurrentSemester());
+        StudentResponse student = studentService.getByEmail(user.getUsername());
+        Long degreeId = getDegreeIdFromEmail(user.getUsername());
+        List<CourseResponse> courses = courseService.getCoursesForStudentSemester(
+                degreeId, student.getCurrentSemester());
         return ResponseEntity.ok(ApiResponse.success("Your courses", courses));
     }
 
@@ -87,7 +81,7 @@ public class StudentSlotController {
     public ResponseEntity<ApiResponse<List<LectureSlotResponse>>> availableSlots(
             @PathVariable Long courseId) {
         return ResponseEntity.ok(ApiResponse.success("Available slots",
-                slotService.findAvailableByCourse(courseId)));
+                slotService.getAvailableSlotsByCourse(courseId)));
     }
 
     @PostMapping("/select")
@@ -98,10 +92,10 @@ public class StudentSlotController {
     public ResponseEntity<ApiResponse<List<EnrollmentResponse>>> selectSlot(
             @AuthenticationPrincipal UserDetails user,
             @Valid @RequestBody SelectSlotRequest request) {
-        List<EnrollmentResponse> enrolled =
-                enrollmentService.selectSlot(user.getUsername(), request);
+        Long studentId = getStudentIdFromEmail(user.getUsername());
+        List<EnrollmentResponse> enrolled = enrollmentService.selectSlot(studentId, request);
         return ResponseEntity.ok(ApiResponse.success(
-                "Slot selected successfully! " + enrolled.size() + " day(s) added to your schedule.",
+                "Slot enrolled successfully!",
                 enrolled));
     }
 
@@ -111,30 +105,39 @@ public class StudentSlotController {
     public ResponseEntity<ApiResponse<Void>> dropSlot(
             @AuthenticationPrincipal UserDetails user,
             @PathVariable String slotGroupCode) {
-        enrollmentService.dropSlot(user.getUsername(), slotGroupCode);
-        return ResponseEntity.ok(ApiResponse.success("Slot dropped: " + slotGroupCode));
+        Long studentId = getStudentIdFromEmail(user.getUsername());
+        enrollmentService.dropSlot(studentId, slotGroupCode);
+        return ResponseEntity.ok(ApiResponse.success("Slot dropped: " + slotGroupCode, null));
     }
 
     @GetMapping("/my-schedule")
     @Operation(summary = "View your full weekly schedule (all enrolled slots)")
     public ResponseEntity<ApiResponse<List<EnrollmentResponse>>> mySchedule(
             @AuthenticationPrincipal UserDetails user) {
+        Long studentId = getStudentIdFromEmail(user.getUsername());
         return ResponseEntity.ok(ApiResponse.success("Your schedule",
-                enrollmentService.getMySchedule(user.getUsername())));
+                enrollmentService.getEnrollmentsForStudent(studentId)));
     }
 
-    // ── Helper ─────────────────────────────────────────────────────────────────
+    // ── Helpers ─────────────────────────────────────────────────────────────────
 
     /**
-     * Gets the student's degree ID from the repository.
-     * This is a thin helper; in a real app you'd either put degreeId
-     * in the JWT claims or add it to StudentResponse.
+     * Gets the student's database ID by looking up their profile from the DB.
+     * Used to translate the JWT email into the studentId required by services.
      */
+    private Long getStudentIdFromEmail(String email) {
+        return studentRepository.findByUserEmail(email)
+                .map(s -> s.getId())
+                .orElseThrow(() -> new DBMS.UniSlot.Backend.exception.ResourceNotFoundException(
+                        "Student", "email", email));
+    }
+
     /** Gets the student's degree ID by looking up their profile from the DB. */
     private Long getDegreeIdFromEmail(String email) {
         return studentRepository.findByUserEmail(email)
                 .map(s -> s.getDegree().getId())
-                .orElseThrow(() -> new com.university.slotselector.exception.ResourceNotFoundException(
+                .orElseThrow(() -> new DBMS.UniSlot.Backend.exception.ResourceNotFoundException(
                         "Student", "email", email));
     }
 }
+
