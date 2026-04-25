@@ -2,16 +2,17 @@ package DBMS.UniSlot.Backend.service.Impl;
 
 
 
-import DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
-import DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
-import DBMS.UniSlot.Backend.dto.response.CourseResponse;
-import DBMS.UniSlot.Backend.dto.response.DegreeResponse;
-import DBMS.UniSlot.Backend.dto.response.SemesterCoursesResponse;
-import DBMS.UniSlot.Backend.entity.*;
-import DBMS.UniSlot.Backend.exception.BusinessRuleException;
-import DBMS.UniSlot.Backend.exception.ResourceNotFoundException;
-import DBMS.UniSlot.Backend.repository.*;
-import DBMS.UniSlot.Backend.service.DegreeService;
+
+import  DBMS.UniSlot.Backend.dto.request.AddCourseToDegreeRequest;
+import  DBMS.UniSlot.Backend.dto.request.CreateDegreeRequest;
+import  DBMS.UniSlot.Backend.dto.response.CourseResponse;
+import  DBMS.UniSlot.Backend.dto.response.DegreeResponse;
+import  DBMS.UniSlot.Backend.dto.response.SemesterCoursesResponse;
+import  DBMS.UniSlot.Backend.entity.*;
+import  DBMS.UniSlot.Backend.exception.BusinessRuleException;
+import  DBMS.UniSlot.Backend.exception.ResourceNotFoundException;
+import  DBMS.UniSlot.Backend.repository.*;
+import  DBMS.UniSlot.Backend.service.DegreeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,10 @@ public class DegreeServiceImpl implements DegreeService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Department", "id", request.getDepartmentId()));
 
+        if (dcmRepository.existsByDegreeIdAndCourseIdAndSemesterNumber(
+                request.getDepartmentId(), 0L, 0)) {
+            // just a placeholder — real guard below
+        }
         if (degreeRepository.existsByCodeAndDepartmentId(
                 request.getCode(), request.getDepartmentId())) {
             throw new BusinessRuleException(
