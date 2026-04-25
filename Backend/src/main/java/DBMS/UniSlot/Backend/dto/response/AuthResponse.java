@@ -1,5 +1,6 @@
 package DBMS.UniSlot.Backend.dto.response;
 
+
 import DBMS.UniSlot.Backend.enums.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
