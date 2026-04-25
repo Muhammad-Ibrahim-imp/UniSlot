@@ -18,4 +18,3 @@ public class UpdateFeeStatusRequest {
     @NotNull(message = "Fee status is required (PAID or UNPAID)")
     private FeeStatus feeStatus;
 }
-

@@ -1,5 +1,6 @@
 package DBMS.UniSlot.Backend.dto.request;
 
+
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
