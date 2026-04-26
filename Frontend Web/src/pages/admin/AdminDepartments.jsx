@@ -69,7 +69,7 @@ export default function AdminDepartments() {
 
       <div className="card">
         <div className="toolbar">
-          <span style={{ fontWeight: 600 }}>{items.length} department{items.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontWeight: 600 }}>{`${items.length} department${items.length !== 1 ? 's' : ''}`}</span>
           <div className="toolbar-spacer" />
           <button className="btn btn-primary" onClick={openCreate}>+ New Department</button>
         </div>

@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://10.7.168.17:8080',
+        target: 'https://unislot-wlot.onrender.com',
         changeOrigin: true,
       }
     }
