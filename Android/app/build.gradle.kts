@@ -13,8 +13,8 @@ android {
         applicationId = "oop.project.unislotandroid"
         minSdk        = 26
         targetSdk     = 35
-        versionCode   = 2
-        versionName   = "1.1"
+        versionCode   = 3
+        versionName   = "1.2"
 
         // Change this to your backend server address
         buildConfigField("String", "BASE_URL", "\"https://unislot-wlot.onrender.com/\"")
