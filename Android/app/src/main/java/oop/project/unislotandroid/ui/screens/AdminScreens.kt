@@ -273,7 +273,8 @@ fun AdminCoursesScreen(vm: MainViewModel) {
                 //Cast state to Success and extract its data list.
                 if (items.isEmpty()) {
                     EmptyState("No courses yet. Tap + to add one.")
-                } else {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                }
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -341,7 +342,6 @@ fun AdminCoursesScreen(vm: MainViewModel) {
                                 }
                             }
                         }
-                    }
                 }
             }
             else -> {}
@@ -461,7 +461,8 @@ fun AdminProfessorsScreen(vm: MainViewModel) {
                 val items = (state as UiState.Success).data
                 if (items.isEmpty()) {
                     EmptyState("No professors yet. Tap + to add one.")
-                } else {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                }
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -524,7 +525,7 @@ fun AdminProfessorsScreen(vm: MainViewModel) {
                             }
                         }
                     }
-                }
+
             }
             else -> {}
         }
