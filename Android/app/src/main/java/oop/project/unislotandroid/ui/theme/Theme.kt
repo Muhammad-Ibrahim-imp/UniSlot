@@ -5,14 +5,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val Primary     = Color(0xFF1A56DB)
-private val OnPrimary   = Color(0xFFFFFFFF)
-private val Secondary   = Color(0xFF0E7490)
+private val Primary     = Color(0xFF1A3262)
+private val OnPrimary   = Color(0xFFF9F9FC)
+private val Secondary   = Color(0xFF7D8EA6)
 private val Background  = Color(0xFFF3F4F6)
 private val Surface     = Color(0xFFFFFFFF)
 private val Error       = Color(0xFFE02424)
-private val OnBackground = Color(0xFF111827)
-private val OnSurface   = Color(0xFF111827)
+private val OnBackground = Color(0xFF282A2D)
+private val OnSurface   = Color(0xFF282A2D)
 
 private val AppColorScheme = lightColorScheme(
 // Main brand color of the app (used for buttons, app bar, highlights)

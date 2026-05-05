@@ -61,8 +61,8 @@ fun LoginScreen(vm: MainViewModel, onLoginSuccess: (String) -> Unit) {
             background(
                 Brush.linearGradient(
                     listOf(
-                        Color(0xFF1E2A3A), // dark tone
-                        Color(0xFF1A56DB)  // blue tone
+                        Color(0xFF282A2D), // dark tone
+                        Color(0xFF1A3262)  // blue tone
                     )
                 )
             ),

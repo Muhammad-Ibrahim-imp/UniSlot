@@ -39,7 +39,7 @@ public class Professor extends BaseEntity {
     /**
      * Professional email for contact and login reference.
      */
-    @Column(name = "email", nullable = false, unique = true, length = 200)
+    @Column(name = "email", unique = true, length = 200)
     private String email;
 
     /**
